@@ -97,6 +97,24 @@ if correct_input:
         ns.sync()
         ns.StartRecording()
 
+        msg="Press a key to start event test"
+        text = psychopy.visual.TextStim(win=win, text=msg, color=[-1, -1, -1],
+                                        font='Arial', units='pix', height=font_height)
+        text.draw()
+        win.flip()
+        engine.say(msg)
+        engine.runAndWait()
+        psychopy.event.waitKeys()
+
+        ns.send_event(bytes('strt'.encode()), label=bytes('test'.encode()),
+                      description=bytes('test'.encode()))
+        core.wait(1)
+        ns.send_event(bytes('go'.encode()), label=bytes('test'.encode()),
+                      description=bytes('test'.encode()))
+        core.wait(1)
+        ns.send_event(bytes('grsp'.encode()), label=bytes('test'.encode()),
+                      description=bytes('test'.encode()))
+
         # shutdown and save data
 
     def quit_exp():
