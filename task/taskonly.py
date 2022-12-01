@@ -128,6 +128,13 @@ if correct_input:
             message_finish = "abort"
             conn.send(message_finish.encode())
 
+            while True:
+                ready = select.select([conn], [], [], 10)
+                if ready[0]:
+                    data = conn.recv(buffer_size)
+                    if "dumped" in data.decode():
+                        break
+
             vid_cmd = str(block).zfill(4) + "_" + "_convert_" + str(timestamp)
             conn.send(vid_cmd.encode())
 
