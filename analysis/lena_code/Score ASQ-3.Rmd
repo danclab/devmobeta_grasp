@@ -1,0 +1,96 @@
+---
+title: "ASQ-3_4months"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r ASQ-3_4months score}
+item <- read.csv("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/3_ASQ3-4months.csv")
+
+# Fonction pour calculer la moyenne par domaine
+score_domaine <- function(data, prefixe) {
+  name_column <- paste0(prefixe, 1:6)
+  sum <- rowSums(data[name_column], na.rm = TRUE)
+  valid_values <- rowSums(!is.na(data[name_column]))
+  mean <- sum / valid_values
+  return(mean)
+}
+
+# Liste des domaines ASQ
+domaines <- c("communication", "gmotor", "fmotor", 
+              "pbsolving", "social")
+
+# Calcul des scores et ajout au data frame
+for (domaine in domaines) {
+  item[[domaine]] <- score_domaine(item, domaine)
+}
+head(item[c("communication","gmotor","fmotor","pbsolving","social")])
+# Export du fichier modifié
+write.csv(item, "/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/3_ASQ-4months_scores.csv", row.names = FALSE)
+
+# Message de confirmation
+cat("file export: 3_ASQ-4months_scores.csv\n")
+```
+```{r ASQ-3_6months score}
+item <- read.csv("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/6_ASQ3-6months.csv")
+
+# Fonction pour calculer la moyenne par domaine
+score_domaine <- function(data, prefixe) {
+  name_column <- paste0(prefixe, 1:6)
+  sum <- rowSums(data[name_column], na.rm = TRUE)
+  valid_values <- rowSums(!is.na(data[name_column]))
+  mean <- sum / valid_values
+  return(mean)
+}
+
+# Liste des domaines ASQ
+domaines <- c("communication", "gmotor", "fmotor", 
+              "pbsolving", "social")
+
+# Calcul des scores et ajout au data frame
+for (domaine in domaines) {
+  item[[domaine]] <- score_domaine(item, domaine)
+}
+head(item[c("communication","gmotor","fmotor","pbsolving","social")])
+# Export du fichier modifié
+write.csv(item, "/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/6_ASQ-6months_scores.csv", row.names = FALSE)
+
+# Message de confirmation
+cat("file export: 6_ASQ-6months_scores.csv\n")
+```
+```{r ASQ-3_12months score}
+item <- read.csv("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/12_ASQ3-12months.csv")
+
+# Fonction pour calculer la moyenne par domaine
+score_domaine <- function(data, prefixe) {
+  name_column <- paste0(prefixe, 1:6)
+  sum <- rowSums(data[name_column], na.rm = TRUE)
+  valid_values <- rowSums(!is.na(data[name_column]))
+  mean <- sum / valid_values
+  return(mean)
+}
+
+# Liste des domaines ASQ
+domaines <- c("communication", "gmotor", "fmotor", 
+              "pbsolving", "social")
+
+# Calcul des scores et ajout au data frame
+for (domaine in domaines) {
+  item[[domaine]] <- score_domaine(item, domaine)
+}
+head(item[c("communication","gmotor","fmotor","pbsolving","social")])
+# Export du fichier modifié
+write.csv(item, "/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/12_ASQ-12months_scores.csv", row.names = FALSE)
+
+# Message de confirmation
+cat("file export: 12_ASQ-12months_scores.csv\n")
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
