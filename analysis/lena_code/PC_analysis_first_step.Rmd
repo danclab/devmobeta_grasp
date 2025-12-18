@@ -1,0 +1,691 @@
+---
+title: "First step PC analysis "
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r PC1}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC1 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+
+```{r PC2}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC2 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC3}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC3 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+
+```{r PC4}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC4 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC5}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC5 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC6}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC6 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+
+```{r PC7}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC7 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+
+library(ggplot2)
+
+# Obtenir les moyennes marginales pour l'interaction
+emm_df <- as.data.frame(emmeans(model, ~ age * epoch))
+
+ggplot(emm_df, aes(x = age, y = emmean, color = epoch, group = epoch)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.1) +
+  labs(title = "Interaction Epoch x Age on PC8",
+       y = "PC8 score",
+       x = "Age") +
+  theme_minimal()
+
+
+```
+```{r PC8}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC8 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+
+library(ggplot2)
+
+# Obtenir les moyennes marginales pour l'interaction
+emm_df <- as.data.frame(emmeans(model, ~ age * epoch))
+
+# Plot avec ggplot
+ggplot(emm_df, aes(x = epoch, y = emmean, color = age, group = age)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.1) +
+  labs(title = "Interaction Age x Epoch sur PC8",
+       y = "Estimated marginal mean (PC8)",
+       x = "Epoch") +
+  theme_minimal()
+
+```
+```{r PC9}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC9 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC10}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC10 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC11}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC11 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC12}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC12 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC13}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC13 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC14}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC14 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC15}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC15 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC16}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC16 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC17}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC17 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC18}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC18 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC19}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC19 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+```{r PC20}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC20 ~ age*epoch + (1 | subject) + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age)
+print(emm)
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
