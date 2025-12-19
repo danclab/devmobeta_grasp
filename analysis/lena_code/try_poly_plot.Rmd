@@ -1,0 +1,2025 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r PC3_GCA_ASQ3_Analysis}
+library(dplyr)
+library(car)
+library(ggplot2)
+library(lme4)
+library(interactions)
+library(emmeans)
+library(ggeffects)
+library(reshape2)
+library(tidyr)
+library(tibble)
+
+  
+three_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+asq3_3m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/3_ASQ-4months_scores.csv')
+asq3_6m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/6_ASQ-6months_scores.csv')
+asq3_12m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/12_ASQ-12months_scores.csv')
+
+print(colnames(asq3_3m))
+print(colnames(asq3_6m))
+print(colnames(asq3_12m))
+
+# Fusion des données PC
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three", age_months = 3),
+  mutate(six_df, df_source = "six", age_months = 6),
+  mutate(twelve_df, df_source = "twelve", age_months = 12)
+) %>%
+  arrange(subject)
+
+# convertit variable age en numérique 
+merged_df$age[merged_df$age == 'three'] <- 3
+merged_df$age[merged_df$age == 'six'] <- 6
+merged_df$age[merged_df$age == 'twelve'] <- 12
+merged_df$age <- as.numeric(merged_df$age)
+
+# Préparation des données ASQ3
+asq3_3m$age_months <- 3
+asq3_6m$age_months <- 6
+asq3_12m$age_months <- 12
+
+# Fusion des données ASQ3
+asq3_all <- bind_rows(asq3_3m, asq3_6m, asq3_12m) %>%
+  select(subject, age_months, communication, gmotor, fmotor, pbsolving, social)
+
+# Fusion des données PC avec ASQ3
+data_combined <- merged_df %>%
+  left_join(asq3_all, by = c("subject", "age_months"))
+
+# Vérification de la fusion
+cat("Nombre de lignes avant fusion:", nrow(merged_df), "\n")
+cat("Nombre de lignes après fusion:", nrow(data_combined), "\n")
+cat("Nombre de sujets avec données ASQ3:", sum(!is.na(data_combined$communication)), "\n")
+
+# Fonction pour créer les polynômes orthogonaux
+code.poly <- function(df = NULL, predictor = NULL, poly.order = NULL, orthogonal = TRUE, draw.poly = TRUE) {
+  require(reshape2)
+  require(ggplot2)
+  
+  # convert choice for orthogonal into choice for raw
+  raw <- (orthogonal - 1)^2
+  
+  # make sure that the declared predictor is actually present in the data.frame
+  if (!predictor %in% names(df)) {
+    warning(paste0(predictor, " is not a variable in your data frame. Check spelling and try again"))
+  }
+  
+  # Extract the vector to be used as the predictor
+  predictor.vector <- df[[predictor]]
+  
+  # create index of predictor (e.g. numbered time bins)
+  predictor.indices <- as.numeric(as.factor(predictor.vector))
+  
+  df$temp.predictor.index <- predictor.indices
+  
+  # create x-order order polys (orthogonal if not raw)
+  predictor.polynomial <- poly(x = unique(sort(predictor.vector)),
+                               degree = poly.order, raw = raw)
+  
+  # use predictor index as index to align
+  # polynomial-transformed predictor values with original dataset
+  df[, paste("poly", 1:poly.order, sep = "")] <-
+    predictor.polynomial[predictor.indices, 1:poly.order]
+  
+  # draw a plot of the polynomial transformations, if desired
+  if (draw.poly == TRUE) {
+    # extract the polynomials from the df
+    df.poly <- unique(df[c(predictor, paste("poly", 1:poly.order, sep = ""))])
+    
+    # melt from wide to long format
+    df.poly.melt <- melt(df.poly, id.vars = predictor)
+    
+    # Make level names intuitive
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly1"] <- "Linear"
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly2"] <- "Quadratic"
+    
+    # change some column names for the output
+    colnames(df.poly.melt)[colnames(df.poly.melt) == "variable"] <- "Order"
+    
+    poly.plot <- ggplot(df.poly.melt, aes(y = value, color = Order)) +
+      aes_string(x = predictor) +
+      geom_line() +
+      xlab(paste0(predictor, " (transformed polynomials)")) +
+      ylab("Transformed value") +
+      scale_color_brewer(palette = "Set1") +
+      theme_bw()
+    
+    print(poly.plot)
+  }
+  
+  # restore correct column names
+  colnames(df)[colnames(df) == "temp.predictor.index"] <- paste0(predictor, ".Index")
+  return(df)
+}
+
+# Application des polynômes orthogonaux
+data.gca <- code.poly(df = data_combined, predictor = "age", poly.order = 2, orthogonal = TRUE, draw.poly = TRUE)
+
+# Modèle principal (sans modération ASQ3)
+cat("\n=== MODÈLE PRINCIPAL (sans ASQ3) ===\n")
+lmer_main <- lmer(PC3 ~ epoch * (poly1 + poly2) + (1 | subject), data = data.gca, REML = TRUE)
+print(summary(lmer_main))
+
+lmer_main_results <- Anova(lmer_main, type = 3)
+print(lmer_main_results)
+
+# Visualisation du modèle principal
+summary_data <- data.gca %>%
+  group_by(age, epoch) %>%
+  summarise(
+    mean_PC3 = mean(PC3, na.rm = TRUE),
+    se_PC3 = sd(PC3, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+p_main <- ggplot(summary_data, aes(x = age, y = mean_PC3, color = epoch)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_PC3 - se_PC3, ymax = mean_PC3 + se_PC3), 
+                width = 0.2) +
+  labs(title = "Évolution moyenne de PC3 par age et epoch",
+       x = "age (mois)", y = "PC3 score ± SE") +
+  theme_bw()
+
+print(p_main)
+
+# Domaines ASQ3 à tester
+asq3_domains <- c("communication", "gmotor", "fmotor", "pbsolving", "social")
+
+# Fonction pour extraire les effets significatifs
+extract_significant_effects <- function(model, alpha = 0.05) {
+  anova_results <- Anova(model, type = 3)
+  p_values <- anova_results$`Pr(>Chisq)`
+  effect_names <- rownames(anova_results)
+  significant_effects <- effect_names[p_values < alpha & !is.na(p_values)]
+  
+  return(list(
+    anova_table = anova_results,
+    significant_effects = significant_effects,
+    all_effects = data.frame(
+      Effect = effect_names,
+      ChiSq = anova_results$Chisq,
+      Df = anova_results$Df,
+      p_value = p_values,
+      Significant = ifelse(p_values < alpha & !is.na(p_values), "***", "")
+    )
+  ))
+}
+# Fonction pour diagnostiquer les données
+diagnose_data <- function() {
+  cat("\n", paste(rep("=", 60), collapse = ""), "\n")
+  cat("DIAGNOSTIC DES DONNÉES\n")
+  cat(paste(rep("=", 60), collapse = ""), "\n")
+  
+  # Vérifier les epoch
+  cat("epoch dans les données:\n")
+  print(table(data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier par age
+  cat("\nepoch par age:\n")
+  print(table(data.gca$age, data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier les données ASQ3 par epoch
+  cat("\nDonnées ASQ3 par epoch:\n")
+  for (domain in asq3_domains) {
+    if (domain %in% colnames(data.gca)) {
+      cat("\n", domain, ":\n")
+      epoch_counts <- data.gca %>%
+        group_by(epoch) %>%
+        summarise(
+          total = n(),
+          non_na = sum(!is.na(.data[[domain]])),
+          prop_complete = round(non_na/total*100, 1),
+          .groups = 'drop'
+        )
+      print(epoch_counts)
+    }
+  }
+}
+# Fonction pour analyser chaque domaine ASQ3
+analyze_asq3_moderator <- function(asq3_domain) {
+  
+  cat("\n", paste(rep("*", 60), collapse = ""), "\n")
+  cat("ANALYSE POUR:", toupper(asq3_domain), "\n")
+  cat(paste(rep("*", 60), collapse = ""), "\n")
+  
+  subset_data <- data.gca[!is.na(data.gca[[asq3_domain]]), ]
+  
+  cat("Nombre d'observations avec données", asq3_domain, ":", nrow(subset_data), "\n")
+  cat("Nombre de sujets uniques:", length(unique(subset_data$subject)), "\n")
+  
+  # Calculer et afficher nombre de sujets par epoch
+  subject_counts <- subset_data %>% 
+    group_by(epoch) %>% 
+    summarise(n_subjects = n_distinct(subject))
+  
+  cat("Nombre de sujets par epoch:\n")
+  print(subject_counts)
+  
+  epochs <- unique(subset_data$epoch)
+  cat("epochs disponibles:", paste(epochs, collapse = ", "), "\n")
+  
+  if (nrow(subset_data) > 20) {
+    
+    for (epoch_val in epochs) {
+      cat("\n=== epoch:", epoch_val, "===\n")
+      
+      epoch_data <- subset_data[subset_data$epoch == epoch_val, ]
+      
+      cat("Nombre d'observations:", nrow(epoch_data), "\n")
+      cat("Nombre de sujets:", length(unique(epoch_data$subject)), "\n")
+      
+      if (nrow(epoch_data) > 10) {
+        asq3_values <- epoch_data[[asq3_domain]]
+        unique_values <- unique(asq3_values[!is.na(asq3_values)])
+        
+        cat("Valeurs uniques ASQ3:", length(unique_values), "\n")
+        cat("range ASQ3:", min(unique_values, na.rm = TRUE), "-", max(unique_values, na.rm = TRUE), "\n")
+        
+        if (length(unique_values) > 2) {
+          
+          formula_mod <- as.formula(paste0("PC3 ~ poly1*", asq3_domain, 
+                                           " + poly2*", asq3_domain, " + (1|subject)"))
+          
+          tryCatch({
+            lmer_mod <- lmer(formula_mod, data = epoch_data, REML = TRUE)
+            cat("Modèle convergé pour", epoch_val, "\n")
+            
+            sig_results <- extract_significant_effects(lmer_mod)
+            cat("Effets significatifs:\n")
+            
+            if (length(sig_results$significant_effects) > 0) {
+              for (effect in sig_results$significant_effects) {
+                effect_row <- sig_results$all_effects[sig_results$all_effects$Effect == effect, ]
+                cat("- ", effect, 
+                    " (Chi² = ", round(effect_row$ChiSq, 3), 
+                    ", p = ", signif(effect_row$p_value, 3), ")\n")
+              }
+            } else {
+              cat("Aucun effet significatif\n")
+            }
+            
+            # Préparer les groupes ASQ3 en 3 groupes 
+            thresholds <- tibble(
+              age = c(3, 3, 3, 3, 3, 6, 6, 6, 6, 6, 12, 12, 12, 12, 12), 
+              domain = c("communication","gmotor","fmotor","pbsolving","social",
+                         "communication","gmotor","fmotor","pbsolving","social",
+                         "communication","gmotor","fmotor","pbsolving","social"), 
+              low_cutoff = c(5.8, 6.33, 5, 5.8, 5.5, 
+                             4.9, 3.70, 4.19, 4.62, 4.22, 
+                             5.21, 3.58, 5.75, 4.55, 3.62), 
+              medium_cutoff = c(7.33, 7.67, 6.67, 7.33, 7.17,
+                                6.83, 5.67, 6.17, 6.5, 6.17, 
+                                5, 5.83, 7, 6.17, 5.67), 
+            )  
+            
+            classify_score <- function(score, age, domain, thresholds_df) {
+              row <- thresholds_df %>%
+                filter(age == !!age, domain == !!domain)
+              
+              if (nrow(row) == 0) {
+                warning(paste("Aucun seuil trouvé pour age =", age, "et domain =", domain))
+                return(NA)
+              }
+              
+              low_cutoff <- row$low_cutoff
+              medium_cutoff <- row$medium_cutoff
+              
+              if (score < low_cutoff) {
+                return("low")
+              } else if (score < medium_cutoff) {
+                return("medium")
+              } else {
+                return("high")
+              }
+            }
+            
+            # créé colonne ASQ3_group dans epoch_data (low, medium, high)
+            epoch_data <- epoch_data %>%
+              rowwise() %>%
+              mutate(ASQ_group = classify_score(get(asq3_domain), age, asq3_domain, thresholds)) %>%
+              ungroup()
+            
+            # Graphique avec tendances poly1 (linéaire) et poly2 (quadratique)
+            p <- ggplot(epoch_data, aes(x = age, y = PC3, color = ASQ_group)) +
+              geom_smooth(method = "lm", formula = y ~ poly(x, 1, raw = TRUE), 
+                          se = FALSE, size = 1.2, linetype = "solid") +  # poly1 = ligne pleine
+              geom_smooth(method = "lm", formula = y ~ poly(x, 2, raw = TRUE), 
+                          se = FALSE, size = 1.2, linetype = "dashed") + # poly2 = pointillée
+              labs(
+                title = paste("PC3 trajectories by ASQ3 levels :", asq3_domain, "- epoch", epoch_val),
+                x = "age (months)",
+                y = "PC3",
+                color = "ASQ3 levels"
+              ) +
+              theme_minimal(base_size = 14) +
+              theme(legend.position = "bottom")
+            
+            print(p)
+            
+          }, error = function(e) {
+            cat("Erreur lmer:", e$message, "\n")
+          })
+        } else {
+          cat("Pas assez de valeurs uniques pour modéliser (minimum 3 requis)\n")
+        }
+      } else {
+        cat("Pas assez de données pour cet epoch (minimum 10 requis)\n")
+      }
+    }
+  } else {
+    cat("Pas assez de données globales pour cette analyse (minimum 20 requis)\n")
+  }
+}
+
+
+diagnose_data()
+
+# Exécuter l'analyse corrigée pour chaque domaine ASQ3
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("ANALYSES DE MODÉRATION ASQ3 (VERSION CORRIGÉE)\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+asq3_results_corrected <- list()
+
+for (domain in asq3_domains) {
+  if (domain %in% colnames(data.gca)) {
+    cat("\n Traitement du domaine:", domain, "\n")
+    results <- analyze_asq3_moderator(domain)
+    asq3_results_corrected[[domain]] <- results
+  } else {
+    cat(" ATTENTION: Domaine ASQ3", domain, "introuvable dans les données\n")
+  }
+}
+
+# Résumé final amélioré
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("RÉSUMÉ FINAL DÉTAILLÉ\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+for (domain in names(asq3_results_corrected)) {
+  cat("\n DOMAINE:", toupper(domain), "\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  
+  domain_results <- asq3_results_corrected[[domain]]
+  
+  if (is.list(domain_results) && !is.null(names(domain_results))) {
+    for (epoch_name in names(domain_results)) {
+      epoch_result <- domain_results[[epoch_name]]
+      cat(" Epoch", epoch_name, ":")
+      
+      if ("model" %in% names(epoch_result)) {
+        n_sig <- length(epoch_result$significance$significant_effects)
+        cat("  Analysée (", n_sig, " effets significatifs)\n")
+      } else if ("error" %in% names(epoch_result)) {
+        cat(" ? Erreur:", epoch_result$error, "\n")
+      } else if ("issue" %in% names(epoch_result)) {
+        cat("  Problème:", epoch_result$issue, "\n")
+      } else {
+        cat("  Statut inconnu\n")
+      }
+    }
+  } else {
+    cat("  Résultats non disponibles\n")
+  }
+}
+
+save_asq3_results <- function() {
+  output_file <- "ASQ3_PC3_GCA_Results.txt"
+  
+  sink(output_file, append = FALSE)
+  
+  
+  cat("MODÈLE PRINCIPAL (Age × Epoch):\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  print(summary(lmer_main))
+  print(Anova(lmer_main, type = 3))
+  
+  cat("\n\nRÉSULTATS MODÉRATION ASQ3:\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  
+  for (domain in names(asq3_results)) {
+    if (!is.null(asq3_results[[domain]])) {
+      cat("\nDOMAINE:", toupper(domain), "\n")
+      print(asq3_results[[domain]])
+    }
+  }
+  
+  sink()
+   
+  cat("Résultats sauvegardés dans:", output_file, "\n")
+}
+
+save_asq3_results()
+
+```
+
+```{r PC3_GCA_ASQ3_Analysis}
+library(dplyr)
+library(car)
+library(ggplot2)
+library(lme4)
+library(interactions)
+library(emmeans)
+library(ggeffects)
+library(reshape2)
+library(tidyr)  # Ajouté pour pivot_wider
+
+three_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+asq3_3m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/3_ASQ-4months_scores.csv')
+asq3_6m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/6_ASQ-6months_scores.csv')
+asq3_12m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/12_ASQ-12months_scores.csv')
+
+print(colnames(asq3_3m))
+print(colnames(asq3_6m))
+print(colnames(asq3_12m))
+
+# Fusion des données PC
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three", age_months = 3),
+  mutate(six_df, df_source = "six", age_months = 6),
+  mutate(twelve_df, df_source = "twelve", age_months = 12)
+) %>%
+  arrange(subject)
+
+# convertit variable age en numérique 
+merged_df$age[merged_df$age == 'three'] <- 3
+merged_df$age[merged_df$age == 'six'] <- 6
+merged_df$age[merged_df$age == 'twelve'] <- 12
+merged_df$age <- as.numeric(merged_df$age)
+
+# Préparation des données ASQ3
+asq3_3m$age_months <- 3
+asq3_6m$age_months <- 6
+asq3_12m$age_months <- 12
+
+# Fusion des données ASQ3
+asq3_all <- bind_rows(asq3_3m, asq3_6m, asq3_12m) %>%
+  select(subject, age_months, communication, gmotor, fmotor, pbsolving, social)
+
+# Fusion des données PC avec ASQ3
+data_combined <- merged_df %>%
+  left_join(asq3_all, by = c("subject", "age_months"))
+
+# Vérification de la fusion
+cat("Nombre de lignes avant fusion:", nrow(merged_df), "\n")
+cat("Nombre de lignes après fusion:", nrow(data_combined), "\n")
+cat("Nombre de sujets avec données ASQ3:", sum(!is.na(data_combined$communication)), "\n")
+
+# Fonction pour créer les polynômes orthogonaux
+code.poly <- function(df = NULL, predictor = NULL, poly.order = NULL, orthogonal = TRUE, draw.poly = TRUE) {
+  require(reshape2)
+  require(ggplot2)
+  
+  # convert choice for orthogonal into choice for raw
+  raw <- (orthogonal - 1)^2
+  
+  # make sure that the declared predictor is actually present in the data.frame
+  if (!predictor %in% names(df)) {
+    warning(paste0(predictor, " is not a variable in your data frame. Check spelling and try again"))
+    return(df)
+  }
+  
+  # Extract the vector to be used as the predictor
+  predictor.vector <- df[[predictor]]
+  
+  # create index of predictor (e.g. numbered time bins)
+  predictor.indices <- as.numeric(as.factor(predictor.vector))
+  
+  df$temp.predictor.index <- predictor.indices
+  
+  # create x-order order polys (orthogonal if not raw)
+  predictor.polynomial <- poly(x = unique(sort(predictor.vector)),
+                               degree = poly.order, raw = raw)
+  
+  # use predictor index as index to align
+  # polynomial-transformed predictor values with original dataset
+  df[, paste("poly", 1:poly.order, sep = "")] <-
+    predictor.polynomial[predictor.indices, 1:poly.order]
+  
+  # draw a plot of the polynomial transformations, if desired
+  if (draw.poly == TRUE) {
+    tryCatch({
+      # extract the polynomials from the df
+      df.poly <- unique(df[c(predictor, paste("poly", 1:poly.order, sep = ""))])
+      
+      # melt from wide to long format
+      df.poly.melt <- melt(df.poly, id.vars = predictor)
+      
+      # Make level names intuitive
+      levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly1"] <- "Linear"
+      levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly2"] <- "Quadratic"
+      levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly3"] <- "Cubic"
+      levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly4"] <- "Quartic"
+      levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly5"] <- "Quintic"
+      levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly6"] <- "Sextic"
+      
+      # change some column names for the output
+      colnames(df.poly.melt)[colnames(df.poly.melt) == "variable"] <- "Order"
+      
+      poly.plot <- ggplot(df.poly.melt, aes(y = value, color = Order)) +
+        aes_string(x = predictor) +
+        geom_line() +
+        xlab(paste0(predictor, " (transformed polynomials)")) +
+        ylab("Transformed value") +
+        scale_color_brewer(palette = "Set1") +
+        theme_bw()
+      
+      print(poly.plot)
+    }, error = function(e) {
+      cat("Erreur lors de la création du graphique polynomial:", e$message, "\n")
+    })
+  }
+  
+  # restore correct column names
+  colnames(df)[colnames(df) == "temp.predictor.index"] <- paste0(predictor, ".Index")
+  return(df)
+}
+
+# Application des polynômes orthogonaux
+data.gca <- code.poly(df = data_combined, predictor = "age", poly.order = 2, orthogonal = TRUE, draw.poly = TRUE)
+
+# Vérifier que les colonnes nécessaires existent
+if(!"PC3" %in% colnames(data.gca)) {
+  stop("La colonne PC3 n'existe pas dans les données")
+}
+
+if(!"epoch" %in% colnames(data.gca)) {
+  stop("La colonne epoch n'existe pas dans les données")
+}
+
+# Modèle principal (sans modération ASQ3)
+cat("\n=== MODÈLE PRINCIPAL (sans ASQ3) ===\n")
+lmer_main <- lmer(PC3 ~ epoch * (poly1 + poly2) + (1 | subject), data = data.gca, REML = TRUE)
+print(summary(lmer_main))
+
+lmer_main_results <- Anova(lmer_main, type = 3)
+print(lmer_main_results)
+
+# Visualisation du modèle principal
+summary_data <- data.gca %>%
+  group_by(age, epoch) %>%
+  summarise(
+    mean_PC3 = mean(PC3, na.rm = TRUE),
+    se_PC3 = sd(PC3, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+p_main <- ggplot(summary_data, aes(x = age, y = mean_PC3, color = epoch)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_PC3 - se_PC3, ymax = mean_PC3 + se_PC3), 
+                width = 0.2) +
+  labs(title = "Évolution moyenne de PC3 par age et epoch",
+       x = "age (mois)", y = "PC3 score ± SE") +
+  theme_bw()
+
+print(p_main)
+
+# Domaines ASQ3 à tester
+asq3_domains <- c("communication", "gmotor", "fmotor", "pbsolving", "social")
+
+# Fonction pour extraire les effets significatifs
+extract_significant_effects <- function(model, alpha = 0.05) {
+  tryCatch({
+    anova_results <- Anova(model, type = 3)
+    p_values <- anova_results$`Pr(>Chisq)`
+    effect_names <- rownames(anova_results)
+    significant_effects <- effect_names[p_values < alpha & !is.na(p_values)]
+    
+    return(list(
+      anova_table = anova_results,
+      significant_effects = significant_effects,
+      all_effects = data.frame(
+        Effect = effect_names,
+        ChiSq = anova_results$Chisq,
+        Df = anova_results$Df,
+        p_value = p_values,
+        Significant = ifelse(p_values < alpha & !is.na(p_values), "***", "")
+      )
+    ))
+  }, error = function(e) {
+    cat("Erreur dans extract_significant_effects:", e$message, "\n")
+    return(NULL)
+  })
+}
+
+# Fonction pour diagnostiquer les données
+diagnose_data <- function() {
+  cat("\n", paste(rep("=", 60), collapse = ""), "\n")
+  cat("DIAGNOSTIC DES DONNÉES\n")
+  cat(paste(rep("=", 60), collapse = ""), "\n")
+  
+  # Vérifier les epoch
+  cat("epoch dans les données:\n")
+  print(table(data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier par age
+  cat("\nepoch par age:\n")
+  print(table(data.gca$age, data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier les données ASQ3 par epoch
+  cat("\nDonnées ASQ3 par epoch:\n")
+  for (domain in asq3_domains) {
+    if (domain %in% colnames(data.gca)) {
+      cat("\n", domain, ":\n")
+      epoch_counts <- data.gca %>%
+        group_by(epoch) %>%
+        summarise(
+          total = n(),
+          non_na = sum(!is.na(.data[[domain]])),
+          prop_complete = round(non_na/total*100, 1),
+          .groups = 'drop'
+        )
+      print(epoch_counts)
+    }
+  }
+  
+  # Vérifier les sujets par epoch
+  cat("\nNombre de sujets par epoch:\n")
+  subject_counts <- data.gca %>%
+    group_by(epoch) %>%
+    summarise(
+      n_subjects = length(unique(subject)),
+      n_observations = n(),
+      .groups = 'drop'
+    )
+  print(subject_counts)
+}
+
+# Fonction pour analyser chaque domaine ASQ3 (VERSION SIMPLIFIÉE)
+analyze_asq3_moderator <- function(asq3_domain) {
+  
+  cat("\n", paste(rep("*", 60), collapse = ""), "\n")
+  cat("ANALYSE POUR:", toupper(asq3_domain), "\n")
+  cat(paste(rep("*", 60), collapse = ""), "\n")
+  
+  # Filtrer les données avec des valeurs ASQ3 non manquantes
+  subset_data <- data.gca[!is.na(data.gca[[asq3_domain]]), ]
+  
+  cat("Nombre d'observations avec données", asq3_domain, ":", nrow(subset_data), "\n")
+  cat("Nombre de sujets uniques:", length(unique(subset_data$subject)), "\n")
+  
+  # Vérification des epoch disponibles
+  epochs <- unique(subset_data$epoch)
+  cat("epoch disponibles:", paste(epochs, collapse = ", "), "\n")
+  
+  if (nrow(subset_data) > 20) {
+    
+    # Analyse par epoch
+    for (epoch_val in epochs) {
+      cat("\n=== epoch:", epoch_val, "===\n")
+      
+      epoch_data <- subset_data[subset_data$epoch == epoch_val, ]
+      
+      cat("Nombre d'observations pour epoch", epoch_val, ":", nrow(epoch_data), "\n")
+      cat("Nombre de sujets pour epoch", epoch_val, ":", length(unique(epoch_data$subject)), "\n")
+      
+      if (nrow(epoch_data) > 10) {
+        
+        # Vérifier la variabilité de la variable ASQ3
+        asq3_values <- epoch_data[[asq3_domain]]
+        unique_values <- unique(asq3_values[!is.na(asq3_values)])
+        cat("Valeurs uniques ASQ3:", length(unique_values), "\n")
+        cat("Range ASQ3:", min(unique_values, na.rm = TRUE), "-", max(unique_values, na.rm = TRUE), "\n")
+        
+        if (length(unique_values) > 2) {
+          
+          # Créer la formule de manière plus sûre
+          formula_str <- paste0("PC3 ~ poly1*", asq3_domain, " + poly2*", asq3_domain, " + (1|subject)")
+          
+          tryCatch({
+            # Modèle avec modération ASQ3
+            lmer_mod <- lmer(as.formula(formula_str), data = epoch_data, REML = TRUE)
+           
+            plot_trajectoire_age_poly(lmer_mod, epoch_data, asq3_domain, epoch_val)
+
+            cat("? Modèle convergé pour", epoch_val, "\n")
+            
+            # Extraire les effets significatifs
+            sig_results <- extract_significant_effects(lmer_mod)
+            
+            if (!is.null(sig_results)) {
+              cat("Effets significatifs:\n")
+              if (length(sig_results$significant_effects) > 0) {
+                for (effect in sig_results$significant_effects) {
+                  effect_row <- sig_results$all_effects[sig_results$all_effects$Effect == effect, ]
+                  cat("- ", effect, " (Chi² = ", round(effect_row$ChiSq, 3), 
+                      ", p = ", round(effect_row$p_value, 4), ")\n")
+                }
+              } else {
+                cat("Aucun effet significatif\n")
+              }
+              
+              # Johnson-Neyman si interactions significatives
+              interaction_effects <- sig_results$significant_effects[grepl(":", sig_results$significant_effects)]
+              
+              if (length(interaction_effects) > 0) {
+                cat("\n? Interactions significatives détectées\n")
+                
+                # Analyser les interactions avec johnson_neyman
+                for (interaction in interaction_effects) {
+                  tryCatch({
+                    if (grepl("poly1", interaction)) {
+                      cat("Analyse JN pour poly1...\n")
+                      temp_data <- epoch_data
+                      temp_data$pred_var <- temp_data$poly1
+                      temp_data$mod_var <- temp_data[[asq3_domain]]
+                      
+                      temp_model <- lmer(PC3 ~ pred_var*mod_var + poly2*mod_var + (1|subject), 
+                                        data = temp_data, REML = TRUE)
+                      
+                      jn_result <- johnson_neyman(model = temp_model, pred = pred_var, modx = mod_var)
+                      print(jn_result$plot)
+                      
+                    } else if (grepl("poly2", interaction)) {
+                      cat("Analyse JN pour poly2...\n")
+                      temp_data <- epoch_data
+                      temp_data$pred_var <- temp_data$poly2
+                      temp_data$mod_var <- temp_data[[asq3_domain]]
+                      
+                      temp_model <- lmer(PC3 ~ poly1*mod_var + pred_var*mod_var + (1|subject), 
+                                        data = temp_data, REML = TRUE)
+                      
+                      jn_result <- johnson_neyman(model = temp_model, pred = pred_var, modx = mod_var)
+                      print(jn_result$plot)
+                    }
+                  }, error = function(e) {
+                    cat("Erreur Johnson-Neyman:", e$message, "\n")
+                  })
+                }
+              }
+            }
+            
+          }, error = function(e) {
+            cat("? Erreur dans le modèle pour", epoch_val, ":", e$message, "\n")
+          })
+        } else {
+          cat("? Pas assez de variabilité dans", asq3_domain, "pour", epoch_val, "\n")
+        }
+      } else {
+        cat("? Pas assez d'observations pour", epoch_val, "\n")
+      }
+    }
+  } else {
+    cat("? Pas assez de données pour analyser", asq3_domain, "\n")
+  }
+}
+
+# Exécuter le diagnostic avant l'analyse
+diagnose_data()
+
+# Exécuter l'analyse pour chaque domaine ASQ3
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("ANALYSES DE MODÉRATION ASQ3\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+asq3_results <- list()
+
+for (domain in asq3_domains) {
+  if (domain %in% colnames(data.gca)) {
+    cat("\n? Traitement du domaine:", domain, "\n")
+    tryCatch({
+      analyze_asq3_moderator(domain)
+      asq3_results[[domain]] <- "Analysé"
+    }, error = function(e) {
+      cat("? Erreur pour", domain, ":", e$message, "\n")
+      asq3_results[[domain]] <- paste("Erreur:", e$message)
+    })
+  } else {
+    cat("? ATTENTION: Domaine ASQ3", domain, "introuvable dans les données\n")
+    asq3_results[[domain]] <- "Colonne manquante"
+  }
+}
+
+# Résumé final
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("RÉSUMÉ FINAL\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+for (domain in names(asq3_results)) {
+  cat("? DOMAINE:", toupper(domain), "-", asq3_results[[domain]], "\n")
+}
+
+# Sauvegarder les résultats
+save_asq3_results <- function() {
+  output_file <- "ASQ3_PC3_GCA_Results.txt"
+  
+  tryCatch({
+    sink(output_file, append = FALSE)
+    
+    cat("ANALYSE GCA PC3 AVEC MODÉRATION ASQ3\n")
+    cat("Date:", format(Sys.Date(), "%d/%m/%Y"), "\n")
+    cat("Heure:", format(Sys.time(), "%H:%M:%S"), "\n\n")
+    
+    cat("MODÈLE PRINCIPAL (Age × Epoch):\n")
+    cat(paste(rep("-", 40), collapse = ""), "\n")
+    print(summary(lmer_main))
+    print(Anova(lmer_main, type = 3))
+    
+    cat("\n\nRÉSULTATS MODÉRATION ASQ3:\n")
+    cat(paste(rep("-", 40), collapse = ""), "\n")
+    
+    for (domain in names(asq3_results)) {
+      cat("\nDOMAINE:", toupper(domain), "-", asq3_results[[domain]], "\n")
+    }
+    
+    sink()
+    
+    cat("? Résultats sauvegardés dans:", output_file, "\n")
+    
+  }, error = function(e) {
+    cat("? Erreur lors de la sauvegarde:", e$message, "\n")
+    if (sink.number() > 0) sink()
+  })
+}
+
+save_asq3_results()
+
+cat("\n=== ANALYSE TERMINÉE ===\n")
+```
+```
+```{r PC3_GCA_ASQ3_Analysis}
+library(dplyr)
+library(car)
+library(ggplot2)
+library(lme4)
+library(interactions)
+library(emmeans)
+library(ggeffects)
+library(reshape2)
+library(tidyr)
+
+
+
+three_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+asq3_3m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/3_ASQ-4months_scores.csv')
+asq3_6m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/6_ASQ-6months_scores.csv')
+asq3_12m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/12_ASQ-12months_scores.csv')
+
+print(colnames(asq3_3m))
+print(colnames(asq3_6m))
+print(colnames(asq3_12m))
+
+# Fusion des données PC
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three", age_months = 3),
+  mutate(six_df, df_source = "six", age_months = 6),
+  mutate(twelve_df, df_source = "twelve", age_months = 12)
+) %>%
+  arrange(subject)
+
+# convertit variable age en numérique 
+merged_df$age[merged_df$age == 'three'] <- 3
+merged_df$age[merged_df$age == 'six'] <- 6
+merged_df$age[merged_df$age == 'twelve'] <- 12
+merged_df$age <- as.numeric(merged_df$age)
+
+# Préparation des données ASQ3
+asq3_3m$age_months <- 3
+asq3_6m$age_months <- 6
+asq3_12m$age_months <- 12
+
+# Fusion des données ASQ3
+asq3_all <- bind_rows(asq3_3m, asq3_6m, asq3_12m) %>%
+  select(subject, age_months, communication, gmotor, fmotor, pbsolving, social)
+
+# Fusion des données PC avec ASQ3
+data_combined <- merged_df %>%
+  left_join(asq3_all, by = c("subject", "age_months"))
+
+# Vérification de la fusion
+cat("Nombre de lignes avant fusion:", nrow(merged_df), "\n")
+cat("Nombre de lignes après fusion:", nrow(data_combined), "\n")
+cat("Nombre de sujets avec données ASQ3:", sum(!is.na(data_combined$communication)), "\n")
+
+# Fonction pour créer les polynômes orthogonaux
+code.poly <- function(df = NULL, predictor = NULL, poly.order = NULL, orthogonal = TRUE, draw.poly = TRUE) {
+  require(reshape2)
+  require(ggplot2)
+  
+  # convert choice for orthogonal into choice for raw
+  raw <- (orthogonal - 1)^2
+  
+  # make sure that the declared predictor is actually present in the data.frame
+  if (!predictor %in% names(df)) {
+    warning(paste0(predictor, " is not a variable in your data frame. Check spelling and try again"))
+  }
+  
+  # Extract the vector to be used as the predictor
+  predictor.vector <- df[[predictor]]
+  
+  # create index of predictor (e.g. numbered time bins)
+  predictor.indices <- as.numeric(as.factor(predictor.vector))
+  
+  df$temp.predictor.index <- predictor.indices
+  
+  # create x-order order polys (orthogonal if not raw)
+  predictor.polynomial <- poly(x = unique(sort(predictor.vector)),
+                               degree = poly.order, raw = raw)
+  
+  # use predictor index as index to align
+  # polynomial-transformed predictor values with original dataset
+  df[, paste("poly", 1:poly.order, sep = "")] <-
+    predictor.polynomial[predictor.indices, 1:poly.order]
+  
+  # draw a plot of the polynomial transformations, if desired
+  if (draw.poly == TRUE) {
+    # extract the polynomials from the df
+    df.poly <- unique(df[c(predictor, paste("poly", 1:poly.order, sep = ""))])
+    
+    # melt from wide to long format
+    df.poly.melt <- melt(df.poly, id.vars = predictor)
+    
+    # Make level names intuitive
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly1"] <- "Linear"
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly2"] <- "Quadratic"
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly3"] <- "Cubic"
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly4"] <- "Quartic"
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly5"] <- "Quintic"
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly6"] <- "Sextic"
+    
+    # change some column names for the output
+    colnames(df.poly.melt)[colnames(df.poly.melt) == "variable"] <- "Order"
+    
+    poly.plot <- ggplot(df.poly.melt, aes(y = value, color = Order)) +
+      aes_string(x = predictor) +
+      geom_line() +
+      xlab(paste0(predictor, " (transformed polynomials)")) +
+      ylab("Transformed value") +
+      scale_color_brewer(palette = "Set1") +
+      theme_bw()
+    
+    print(poly.plot)
+  }
+  
+  # restore correct column names
+  colnames(df)[colnames(df) == "temp.predictor.index"] <- paste0(predictor, ".Index")
+  return(df)
+}
+
+# Application des polynômes orthogonaux
+data.gca <- code.poly(df = data_combined, predictor = "age", poly.order = 2, orthogonal = TRUE, draw.poly = TRUE)
+
+# Modèle principal (sans modération ASQ3)
+cat("\n=== MODÈLE PRINCIPAL (sans ASQ3) ===\n")
+lmer_main <- lmer(PC3 ~ epoch * (poly1 + poly2) + (1 | subject), data = data.gca, REML = TRUE)
+print(summary(lmer_main))
+
+lmer_main_results <- Anova(lmer_main, type = 3)
+print(lmer_main_results)
+
+# Visualisation du modèle principal
+summary_data <- data.gca %>%
+  group_by(age, epoch) %>%
+  summarise(
+    mean_PC3 = mean(PC3, na.rm = TRUE),
+    se_PC3 = sd(PC3, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+p_main <- ggplot(summary_data, aes(x = age, y = mean_PC3, color = epoch)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_PC3 - se_PC3, ymax = mean_PC3 + se_PC3), 
+                width = 0.2) +
+  labs(title = "Évolution moyenne de PC3 par age et epoch",
+       x = "age (mois)", y = "PC3 score ± SE") +
+  theme_bw()
+
+print(p_main)
+
+# Domaines ASQ3 à tester
+asq3_domains <- c("communication", "gmotor", "fmotor", "pbsolving", "social")
+
+# Fonction pour extraire les effets significatifs
+extract_significant_effects <- function(model, alpha = 0.05) {
+  anova_results <- Anova(model, type = 3)
+  p_values <- anova_results$`Pr(>Chisq)`
+  effect_names <- rownames(anova_results)
+  significant_effects <- effect_names[p_values < alpha & !is.na(p_values)]
+  
+  return(list(
+    anova_table = anova_results,
+    significant_effects = significant_effects,
+    all_effects = data.frame(
+      Effect = effect_names,
+      ChiSq = anova_results$Chisq,
+      Df = anova_results$Df,
+      p_value = p_values,
+      Significant = ifelse(p_values < alpha & !is.na(p_values), "***", "")
+    )
+  ))
+}
+
+# Fonction pour diagnostiquer les données
+diagnose_data <- function() {
+  cat("\n", paste(rep("=", 60), collapse = ""), "\n")
+  cat("DIAGNOSTIC DES DONNÉES\n")
+  cat(paste(rep("=", 60), collapse = ""), "\n")
+  
+  # Vérifier les epoch
+  cat("epoch dans les données:\n")
+  print(table(data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier par age
+  cat("\nepoch par age:\n")
+  print(table(data.gca$age, data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier les données ASQ3 par epoch
+  cat("\nDonnées ASQ3 par epoch:\n")
+  for (domain in asq3_domains) {
+    if (domain %in% colnames(data.gca)) {
+      cat("\n", domain, ":\n")
+      epoch_counts <- data.gca %>%
+        group_by(epoch) %>%
+        summarise(
+          total = n(),
+          non_na = sum(!is.na(.data[[domain]])),
+          prop_complete = round(non_na/total*100, 1),
+          .groups = 'drop'
+        )
+      print(epoch_counts)
+    }
+  }
+  
+  # Vérifier les sujets par epoch
+  cat("\nNombre de sujets par epoch:\n")
+  subject_counts <- data.gca %>%
+    group_by(epoch) %>%
+    summarise(
+      n_subjects = length(unique(subject)),
+      n_observations = n(),
+      .groups = 'drop'
+    )
+  print(subject_counts)
+}
+
+# Fonction pour analyser chaque domaine ASQ3
+analyze_asq3_moderator <- function(asq3_domain) {
+  
+  cat("\n", paste(rep("*", 60), collapse = ""), "\n")
+  cat("ANALYSE POUR:", toupper(asq3_domain), "\n")
+  cat(paste(rep("*", 60), collapse = ""), "\n")
+  
+  # Filtrer les données avec des valeurs ASQ3 non manquantes
+  subset_data <- data.gca[!is.na(data.gca[[asq3_domain]]), ]
+  
+  cat("Nombre d'observations avec données", asq3_domain, ":", nrow(subset_data), "\n")
+  cat("Nombre de sujets uniques:", length(unique(subset_data$subject)), "\n")
+  
+  # Vérification des epoch disponibles
+  epochs <- unique(subset_data$epoch)
+  cat("epoch disponibles:", paste(epochs, collapse = ", "), "\n")
+  
+  if (nrow(subset_data) > 20) {  # Seuil minimum de données
+    
+    # STOCKAGE DES RÉSULTATS POUR CHAQUE epoch
+    epoch_results <- list()
+    
+    # Analyse par epoch
+    for (epoch_val in epochs) {
+      cat("\n=== epoch:", epoch_val, "===\n")
+      
+      epoch_data <- subset_data[subset_data$epoch == epoch_val, ]
+      
+      cat("Nombre d'observations pour epoch", epoch_val, ":", nrow(epoch_data), "\n")
+      cat("Nombre de sujets pour epoch", epoch_val, ":", length(unique(epoch_data$subject)), "\n")
+      
+      if (nrow(epoch_data) > 10) {
+        
+        # Vérifier la variabilité de la variable ASQ3
+        asq3_values <- epoch_data[[asq3_domain]]
+        unique_values <- unique(asq3_values[!is.na(asq3_values)])
+        cat("Valeurs uniques ASQ3:", length(unique_values), "\n")
+        cat("Range ASQ3:", min(unique_values, na.rm = TRUE), "-", max(unique_values, na.rm = TRUE), "\n")
+        
+        if (length(unique_values) > 2) {
+          
+          # Créer la formule
+          formula_mod <- as.formula(paste0("PC3 ~ poly1*", asq3_domain, 
+                                           " + poly2*", asq3_domain, " + (1|subject)"))
+          
+          tryCatch({
+            # Modèle avec modération ASQ3
+            lmer_mod <- lmer(formula_mod, data = epoch_data, REML = TRUE)
+            
+            cat("? Modèle convergé pour", epoch_val, "\n")
+            
+            # Extraire les effets significatifs
+            sig_results <- extract_significant_effects(lmer_mod)
+            
+            cat("Effets significatifs:\n")
+            if (length(sig_results$significant_effects) > 0) {
+              for (effect in sig_results$significant_effects) {
+                effect_row <- sig_results$all_effects[sig_results$all_effects$Effect == effect, ]
+                cat("- ", effect, " (Chi² = ", round(effect_row$ChiSq, 3), 
+                    ", p = ", round(effect_row$p_value, 4), ")\n")
+              }
+            } else {
+              cat("Aucun effet significatif\n")
+            }
+            
+            # Sauvegarder les résultats de cette epoch
+            epoch_results[[epoch_val]] <- list(
+              model = lmer_mod,
+              significance = sig_results,
+              epoch = epoch_val,
+              domain = asq3_domain,
+              n_obs = nrow(epoch_data),
+              n_subjects = length(unique(epoch_data$subject))
+            )
+            
+            # Vérifier s'il y a des interactions significatives
+            interaction_effects <- sig_results$significant_effects[grepl(":", sig_results$significant_effects)]
+            
+            if (length(interaction_effects) > 0) {
+              cat("\n? Interactions significatives détectées - Création du graphique de trajectoires:\n")
+              
+              # Créer le graphique de trajectoires
+              tryCatch({
+                plot_trajectoire_age_poly(lmer_mod, epoch_data, asq3_domain, epoch_val)
+                cat("? Graphique de trajectoires créé avec succès\n")
+              }, error = function(e) {
+                cat("? Erreur lors de la création du graphique:", e$message, "\n")
+              })
+              
+              # Johnson-Neyman pour poly1
+              if (any(grepl(paste0("poly1.*", asq3_domain, "|", asq3_domain, ".*poly1"), interaction_effects))) {
+                cat("Analyse JN pour poly1...\n")
+                tryCatch({
+                  temp_data <- epoch_data
+                  temp_data$pred_var <- temp_data$poly1
+                  temp_data$mod_var <- temp_data[[asq3_domain]]
+                  
+                  temp_model <- lmer(PC3 ~ pred_var*mod_var + poly2*mod_var + (1|subject), 
+                                     data = temp_data, REML = TRUE)
+                  
+                  jn_poly1 <- johnson_neyman(model = temp_model, pred = pred_var, modx = mod_var)
+                  
+                  # Améliorer le graphique
+                  jn_poly1$plot <- jn_poly1$plot + 
+                    labs(title = paste("Interaction poly1 ×", asq3_domain, "- epoch:", epoch_val),
+                         subtitle = "Johnson-Neyman test for linear age trend",
+                         x = paste("Niveau de", asq3_domain),
+                         y = "Effet poly1 sur PC3") +
+                    theme_minimal()
+                  
+                  print(jn_poly1$plot)
+                  cat("? Johnson-Neyman poly1 réussi\n")
+                  
+                }, error = function(e) {
+                  cat("? Erreur Johnson-Neyman poly1:", e$message, "\n")
+                })
+              }
+              
+              # Johnson-Neyman pour poly2
+              if (any(grepl(paste0("poly2.*", asq3_domain, "|", asq3_domain, ".*poly2"), interaction_effects))) {
+                cat("Analyse JN pour poly2...\n")
+                tryCatch({
+                  temp_data <- epoch_data
+                  temp_data$pred_var <- temp_data$poly2
+                  temp_data$mod_var <- temp_data[[asq3_domain]]
+                  
+                  temp_model <- lmer(PC3 ~ poly1*mod_var + pred_var*mod_var + (1|subject), 
+                                     data = temp_data, REML = TRUE)
+                  
+                  jn_poly2 <- johnson_neyman(model = temp_model, pred = pred_var, modx = mod_var)
+                  
+                  # Améliorer le graphique
+                  jn_poly2$plot <- jn_poly2$plot + 
+                    labs(title = paste("Interaction poly2 ×", asq3_domain, "- epoch:", epoch_val),
+                         subtitle = "Johnson-Neyman test for quadratic age trend",
+                         x = paste("Niveau de", asq3_domain),
+                         y = "Effet poly2 sur PC3") +
+                    theme_minimal()
+                  
+                  print(jn_poly2$plot)
+                  cat("? Johnson-Neyman poly2 réussi\n")
+                  
+                }, error = function(e) {
+                  cat("? Erreur Johnson-Neyman poly2:", e$message, "\n")
+                })
+              } # fin if poly2
+            } # fin if interactions significatives
+            
+          }, error = function(e) {
+            cat("? Erreur modèle lmer :", e$message, "\n")
+          })
+          
+        } # fin if length(unique_values) > 2
+      } # fin if nrow(epoch_data) > 10
+    } # fin for epoch_val in epochs
+  } # fin if nrow(subset_data) > 20
+} # fin function analyze_asq3_moderator
+
+diagnose_data()
+
+# Exécuter l'analyse corrigée pour chaque domaine ASQ3
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("ANALYSES DE MODÉRATION ASQ3 (VERSION CORRIGÉE)\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+asq3_results_corrected <- list()
+
+for (domain in asq3_domains) {
+  if (domain %in% colnames(data.gca)) {
+    cat("\n? Traitement du domaine:", domain, "\n")
+    results <- analyze_asq3_moderator(domain)
+    asq3_results_corrected[[domain]] <- results
+  } else {
+    cat("?? ATTENTION: Domaine ASQ3", domain, "introuvable dans les données\n")
+  }
+}
+
+# Résumé final amélioré
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("RÉSUMÉ FINAL DÉTAILLÉ\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+for (domain in names(asq3_results_corrected)) {
+  cat("\n? DOMAINE:", toupper(domain), "\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  
+  domain_results <- asq3_results_corrected[[domain]]
+  
+  if (is.list(domain_results) && !is.null(names(domain_results))) {
+    for (epoch_name in names(domain_results)) {
+      epoch_result <- domain_results[[epoch_name]]
+      cat("  ? Epoch", epoch_name, ":")
+      
+      if ("model" %in% names(epoch_result)) {
+        n_sig <- length(epoch_result$significance$significant_effects)
+        cat("  Analysée (", n_sig, " effets significatifs)\n")
+      } else if ("error" %in% names(epoch_result)) {
+        cat("  ? Erreur:", epoch_result$error, "\n")
+      } else if ("issue" %in% names(epoch_result)) {
+        cat("  ?? Problème:", epoch_result$issue, "\n")
+      } else {
+        cat("  ? Statut inconnu\n")
+      }
+    }
+  } else {
+    cat("  ? Résultats non disponibles\n")
+  }
+}
+
+save_asq3_results <- function() {
+  output_file <- "ASQ3_PC3_GCA_Results.txt"
+  
+  sink(output_file, append = FALSE)
+  
+  cat("ANALYSE GCA PC3 AVEC MODÉRATION ASQ3\n")
+  cat("Date:", format(Sys.Date(), "%d/%m/%Y"), "\n")
+  cat("Heure:", format(Sys.time(), "%H:%M:%S"), "\n\n")
+  
+  cat("MODÈLE PRINCIPAL (Age × Epoch):\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  print(summary(lmer_main))
+  print(Anova(lmer_main, type = 3))
+  
+  cat("\n\nRÉSULTATS MODÉRATION ASQ3:\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  
+  for (domain in names(asq3_results_corrected)) {
+    if (!is.null(asq3_results_corrected[[domain]])) {
+      cat("\nDOMAINE:", toupper(domain), "\n")
+      print(asq3_results_corrected[[domain]])
+    }
+  }
+  
+  sink()
+  
+  cat("? Résultats sauvegardés dans:", output_file, "\n")
+}
+
+save_asq3_results()
+```
+
+```{r PC3_GCA_ASQ3_Analysis}
+# Fonction corrigée pour tracer les interactions spécifiques
+plot_interaction_effects <- function(lmer_mod, epoch_data, asq3_domain, epoch_val, interaction_effects) {
+  
+  # Créer une séquence d'age  
+  age_seq <- seq(min(epoch_data$age), max(epoch_data$age), length.out = 100)
+  
+  # Valeurs représentatives d'ASQ3 (bas, moyen, élevé)
+  valeurs_asq3 <- quantile(epoch_data[[asq3_domain]], probs = c(0.1, 0.5, 0.9), na.rm = TRUE)
+  
+  # ? CORRECTION PRINCIPALE : Créer les données de prédiction avec les vraies valeurs d'age
+  # puis laisser predict() gérer les transformations polynomiales
+  newdata <- expand.grid(
+    age = age_seq,
+    asq3_val = valeurs_asq3
+  )
+  
+  # Renommer pour correspondre au modèle
+  names(newdata)[names(newdata) == "asq3_val"] <- asq3_domain
+  
+  # ? Laisser predict() calculer automatiquement poly(age, 2) 
+  # en utilisant les mêmes paramètres que lors de l'ajustement du modèle
+  newdata$PC3_pred <- predict(lmer_mod, newdata = newdata, re.form = NA, allow.new.levels = TRUE)
+  
+  # Créer les étiquettes pour ASQ3
+  newdata$ASQ3_level <- factor(newdata[[asq3_domain]], 
+                               levels = valeurs_asq3,
+                               labels = c("Bas", "Moyen", "Élevé"))
+  
+  # Graphique principal des trajectoires
+  p1 <- ggplot(newdata, aes(x = age, y = PC3_pred, color = ASQ3_level)) +
+    geom_line(size = 1.3) +
+    geom_point(size = 2, alpha = 0.7) +
+    labs(title = paste0("Trajectoires PC3 selon ", asq3_domain, " (epoch: ", epoch_val, ")"),
+         subtitle = paste("Interactions:", paste(interaction_effects, collapse = ", ")),
+         x = "age (mois)", 
+         y = "PC3 prédit",
+         color = paste("Niveau", asq3_domain)) +
+    scale_color_viridis_d(option = "plasma", end = 0.8) +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 12, face = "bold"),
+          plot.subtitle = element_text(size = 10))
+  
+  print(p1)
+  
+  # Vérification des courbures pour chaque niveau
+  cat("\n? Analyse des trajectoires par niveau d'ASQ3:\n")
+  for (i in 1:length(valeurs_asq3)) {
+    subset_data <- newdata[newdata[[asq3_domain]] == valeurs_asq3[i], ]
+    
+    # Calculer les différences secondes pour détecter la courbure
+    n <- nrow(subset_data)
+    if (n >= 3) {
+      # Différences premières
+      diff1 <- diff(subset_data$PC3_pred)
+      # Différences secondes (approximation de la dérivée seconde)
+      diff2 <- diff(diff1)
+      
+      mean_curvature <- mean(diff2)
+      
+      level_name <- c("Bas", "Moyen", "Élevé")[i]
+      curvature_type <- ifelse(abs(mean_curvature) < 0.001, "quasi-linéaire", 
+                              ifelse(mean_curvature > 0, "concave vers le haut", "concave vers le bas"))
+      
+      cat(sprintf("- %s %s: %s (courbure moyenne = %.6f)\n", 
+                  asq3_domain, level_name, curvature_type, mean_curvature))
+    }
+  }
+  
+  # Si interaction avec poly2, analyse plus détaillée
+  if (any(grepl("poly2", interaction_effects))) {
+    cat("\n? Analyse détaillée de l'interaction quadratique:\n")
+    
+    # Créer un graphique montrant les différences de courbure
+    curvature_data <- data.frame()
+    
+    for (i in 1:length(valeurs_asq3)) {
+      subset_data <- newdata[newdata[[asq3_domain]] == valeurs_asq3[i], ]
+      
+      # Ajuster un modèle quadratique direct pour cette sous-population
+      quad_model <- lm(PC3_pred ~ poly(age, 2), data = subset_data)
+      
+      # Extraire les coefficients
+      intercept <- coef(quad_model)[1]
+      linear_coef <- coef(quad_model)[2]
+      quad_coef <- coef(quad_model)[3]
+      
+      curvature_data <- rbind(curvature_data, data.frame(
+        ASQ3_level = c("Bas", "Moyen", "Élevé")[i],
+        ASQ3_value = valeurs_asq3[i],
+        intercept = intercept,
+        linear_coef = linear_coef,
+        quad_coef = quad_coef
+      ))
+    }
+    
+    # Graphique des coefficients quadratiques
+    p2 <- ggplot(curvature_data, aes(x = ASQ3_value, y = quad_coef)) +
+      geom_line(color = "purple", size = 1.2) +
+      geom_point(color = "darkviolet", size = 3) +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+      labs(title = paste0("Variation du coefficient quadratique selon ", asq3_domain),
+           subtitle = "Un coefficient proche de 0 indique une trajectoire linéaire",
+           x = paste("Valeur", asq3_domain),
+           y = "Coefficient quadratique") +
+      theme_minimal()
+    
+    print(p2)
+    
+    # Rapport détaillé
+    cat("\nRapport des coefficients quadratiques:\n")
+    for (i in 1:nrow(curvature_data)) {
+      cat(sprintf("- %s %s: coefficient = %.6f", 
+                  asq3_domain, curvature_data$ASQ3_level[i], curvature_data$quad_coef[i]))
+      if (abs(curvature_data$quad_coef[i]) < 0.001) {
+        cat(" ? Trajectoire quasi-linéaire")
+      } else if (curvature_data$quad_coef[i] > 0) {
+        cat(" ? Courbure vers le haut (accélération)")
+      } else {
+        cat(" ? Courbure vers le bas (décélération)")
+      }
+      cat("\n")
+    }
+  }
+  
+  # Diagnostic supplémentaire
+  cat("\n? Diagnostic:\n")
+  range_pred <- range(newdata$PC3_pred)
+  cat(sprintf("- Étendue des prédictions: %.4f à %.4f\n", range_pred[1], range_pred[2]))
+  cat(sprintf("- Différence max entre niveaux: %.4f\n", 
+              max(newdata$PC3_pred) - min(newdata$PC3_pred)))
+  
+  # Vérifier si les interactions sont réellement captées
+  if (length(unique(newdata$PC3_pred)) < 10) {
+    cat("??  ATTENTION: Très peu de variation dans les prédictions - vérifiez votre modèle!\n")
+  }
+}
+
+# Fonction utilitaire pour diagnostiquer le modèle
+diagnostic_lmer_mod <- function(lmer_mod) {
+  cat("? Diagnostic du modèle:\n")
+  cat("Termes dans le modèle:\n")
+  print(terms(lmer_mod))
+  cat("\nCoefficients:\n")
+  print(fixef(lmer_mod))
+  cat("\nFormule du modèle:\n")
+  print(formula(lmer_mod))
+}
+```
+
+```{r PC8_GCA_ASQ3_Analysis}
+library(dplyr)
+library(car)
+library(ggplot2)
+library(lme4)
+library(interactions)
+library(emmeans)
+library(ggeffects)
+library(reshape2)
+library(tidyr)
+library(tibble)
+
+
+three_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+asq3_3m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/3_ASQ-4months_scores.csv')
+asq3_6m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/6_ASQ-6months_scores.csv')
+asq3_12m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/12_ASQ-12months_scores.csv')
+
+print(colnames(asq3_3m))
+print(colnames(asq3_6m))
+print(colnames(asq3_12m))
+
+# Fusion des données PC
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three", age_months = 3),
+  mutate(six_df, df_source = "six", age_months = 6),
+  mutate(twelve_df, df_source = "twelve", age_months = 12)
+) %>%
+  arrange(subject)
+
+# convertit variable age en numérique 
+merged_df$age[merged_df$age == 'three'] <- 3
+merged_df$age[merged_df$age == 'six'] <- 6
+merged_df$age[merged_df$age == 'twelve'] <- 12
+merged_df$age <- as.numeric(merged_df$age)
+
+# Préparation des données ASQ3
+asq3_3m$age_months <- 3
+asq3_6m$age_months <- 6
+asq3_12m$age_months <- 12
+
+# Fusion des données ASQ3
+asq3_all <- bind_rows(asq3_3m, asq3_6m, asq3_12m) %>%
+  select(subject, age_months, communication, gmotor, fmotor, pbsolving, social)
+
+# Fusion des données PC avec ASQ3
+data_combined <- merged_df %>%
+  left_join(asq3_all, by = c("subject", "age_months"))
+
+# Vérification de la fusion
+cat("Nombre de lignes avant fusion:", nrow(merged_df), "\n")
+cat("Nombre de lignes après fusion:", nrow(data_combined), "\n")
+cat("Nombre de sujets avec données ASQ3:", sum(!is.na(data_combined$communication)), "\n")
+
+# Fonction pour créer les polynômes orthogonaux
+code.poly <- function(df = NULL, predictor = NULL, poly.order = NULL, orthogonal = TRUE, draw.poly = TRUE) {
+  require(reshape2)
+  require(ggplot2)
+  
+  # convert choice for orthogonal into choice for raw
+  raw <- (orthogonal - 1)^2
+  
+  # make sure that the declared predictor is actually present in the data.frame
+  if (!predictor %in% names(df)) {
+    warning(paste0(predictor, " is not a variable in your data frame. Check spelling and try again"))
+  }
+  
+  # Extract the vector to be used as the predictor
+  predictor.vector <- df[[predictor]]
+  
+  # create index of predictor (e.g. numbered time bins)
+  predictor.indices <- as.numeric(as.factor(predictor.vector))
+  
+  df$temp.predictor.index <- predictor.indices
+  
+  # create x-order order polys (orthogonal if not raw)
+  predictor.polynomial <- poly(x = unique(sort(predictor.vector)),
+                               degree = poly.order, raw = raw)
+  
+  # use predictor index as index to align
+  # polynomial-transformed predictor values with original dataset
+  df[, paste("poly", 1:poly.order, sep = "")] <-
+    predictor.polynomial[predictor.indices, 1:poly.order]
+  
+  # draw a plot of the polynomial transformations, if desired
+  if (draw.poly == TRUE) {
+    # extract the polynomials from the df
+    df.poly <- unique(df[c(predictor, paste("poly", 1:poly.order, sep = ""))])
+    
+    # melt from wide to long format
+    df.poly.melt <- melt(df.poly, id.vars = predictor)
+    
+    # Make level names intuitive
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly1"] <- "Linear"
+    levels(df.poly.melt$variable)[levels(df.poly.melt$variable) == "poly2"] <- "Quadratic"
+    
+    # change some column names for the output
+    colnames(df.poly.melt)[colnames(df.poly.melt) == "variable"] <- "Order"
+    
+    poly.plot <- ggplot(df.poly.melt, aes(y = value, color = Order)) +
+      aes_string(x = predictor) +
+      geom_line() +
+      xlab(paste0(predictor, " (transformed polynomials)")) +
+      ylab("Transformed value") +
+      scale_color_brewer(palette = "Set1") +
+      theme_bw()
+    
+    print(poly.plot)
+  }
+  
+  # restore correct column names
+  colnames(df)[colnames(df) == "temp.predictor.index"] <- paste0(predictor, ".Index")
+  return(df)
+}
+
+# Application des polynômes orthogonaux
+data.gca <- code.poly(df = data_combined, predictor = "age", poly.order = 2, orthogonal = TRUE, draw.poly = TRUE)
+
+# Modèle principal (sans modération ASQ3)
+cat("\n=== MODÈLE PRINCIPAL (sans ASQ3) ===\n")
+lmer_main <- lmer(PC8 ~ epoch * (poly1 + poly2) + (1 | subject), data = data.gca, REML = TRUE)
+print(summary(lmer_main))
+
+lmer_main_results <- Anova(lmer_main, type = 3)
+print(lmer_main_results)
+
+# Visualisation du modèle principal
+summary_data <- data.gca %>%
+  group_by(age, epoch) %>%
+  summarise(
+    mean_PC8 = mean(PC8, na.rm = TRUE),
+    se_PC8 = sd(PC8, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+p_main <- ggplot(summary_data, aes(x = age, y = mean_PC8, color = epoch)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_PC8 - se_PC8, ymax = mean_PC8 + se_PC8), 
+                width = 0.2) +
+  labs(title = "Évolution moyenne de PC8 par age et epoch",
+       x = "age (mois)", y = "PC8 score ± SE") +
+  theme_bw()
+
+print(p_main)
+
+# Domaines ASQ3 à tester
+asq3_domains <- c("communication", "gmotor", "fmotor", "pbsolving", "social")
+
+# Fonction pour extraire les effets significatifs
+extract_significant_effects <- function(model, alpha = 0.05) {
+  anova_results <- Anova(model, type = 3)
+  p_values <- anova_results$`Pr(>Chisq)`
+  effect_names <- rownames(anova_results)
+  significant_effects <- effect_names[p_values < alpha & !is.na(p_values)]
+  
+  return(list(
+    anova_table = anova_results,
+    significant_effects = significant_effects,
+    all_effects = data.frame(
+      Effect = effect_names,
+      ChiSq = anova_results$Chisq,
+      Df = anova_results$Df,
+      p_value = p_values,
+      Significant = ifelse(p_values < alpha & !is.na(p_values), "***", "")
+    )
+  ))
+}
+# Fonction pour diagnostiquer les données
+diagnose_data <- function() {
+  cat("\n", paste(rep("=", 60), collapse = ""), "\n")
+  cat("DIAGNOSTIC DES DONNÉES\n")
+  cat(paste(rep("=", 60), collapse = ""), "\n")
+  
+  # Vérifier les epoch
+  cat("epoch dans les données:\n")
+  print(table(data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier par age
+  cat("\nepoch par age:\n")
+  print(table(data.gca$age, data.gca$epoch, useNA = "ifany"))
+  
+  # Vérifier les données ASQ3 par epoch
+  cat("\nDonnées ASQ3 par epoch:\n")
+  for (domain in asq3_domains) {
+    if (domain %in% colnames(data.gca)) {
+      cat("\n", domain, ":\n")
+      epoch_counts <- data.gca %>%
+        group_by(epoch) %>%
+        summarise(
+          total = n(),
+          non_na = sum(!is.na(.data[[domain]])),
+          prop_complete = round(non_na/total*100, 1),
+          .groups = 'drop'
+        )
+      print(epoch_counts)
+    }
+  }
+}
+# Fonction pour analyser chaque domaine ASQ3
+analyze_asq3_moderator <- function(asq3_domain) {
+  
+  cat("\n", paste(rep("*", 60), collapse = ""), "\n")
+  cat("ANALYSE POUR:", toupper(asq3_domain), "\n")
+  cat(paste(rep("*", 60), collapse = ""), "\n")
+  
+  subset_data <- data.gca[!is.na(data.gca[[asq3_domain]]), ]
+  
+  cat("Nombre d'observations avec données", asq3_domain, ":", nrow(subset_data), "\n")
+  cat("Nombre de sujets uniques:", length(unique(subset_data$subject)), "\n")
+  
+  # Calculer et afficher nombre de sujets par epoch
+  subject_counts <- subset_data %>% 
+    group_by(epoch) %>% 
+    summarise(n_subjects = n_distinct(subject))
+  
+  cat("Nombre de sujets par epoch:\n")
+  print(subject_counts)
+  
+  epochs <- unique(subset_data$epoch)
+  cat("epochs disponibles:", paste(epochs, collapse = ", "), "\n")
+  
+  if (nrow(subset_data) > 20) {
+    
+    for (epoch_val in epochs) {
+      cat("\n=== epoch:", epoch_val, "===\n")
+      
+      epoch_data <- subset_data[subset_data$epoch == epoch_val, ]
+      
+      cat("Nombre d'observations:", nrow(epoch_data), "\n")
+      cat("Nombre de sujets:", length(unique(epoch_data$subject)), "\n")
+      
+      if (nrow(epoch_data) > 10) {
+        asq3_values <- epoch_data[[asq3_domain]]
+        unique_values <- unique(asq3_values[!is.na(asq3_values)])
+        
+        cat("Valeurs uniques ASQ3:", length(unique_values), "\n")
+        cat("range ASQ3:", min(unique_values, na.rm = TRUE), "-", max(unique_values, na.rm = TRUE), "\n")
+        
+        if (length(unique_values) > 2) {
+          
+          formula_mod <- as.formula(paste0("PC8 ~ poly1*", asq3_domain, 
+                                           " + poly2*", asq3_domain, " + (1|subject)"))
+          
+          tryCatch({
+            lmer_mod <- lmer(formula_mod, data = epoch_data, REML = TRUE)
+            cat("Modèle convergé pour", epoch_val, "\n")
+            
+            sig_results <- extract_significant_effects(lmer_mod)
+            cat("Effets significatifs:\n")
+            
+            if (length(sig_results$significant_effects) > 0) {
+              for (effect in sig_results$significant_effects) {
+                effect_row <- sig_results$all_effects[sig_results$all_effects$Effect == effect, ]
+                cat("- ", effect, 
+                    " (Chi² = ", round(effect_row$ChiSq, 3), 
+                    ", p = ", signif(effect_row$p_value, 3), ")\n")
+              }
+            } else {
+              cat("Aucun effet significatif\n")
+            }
+            
+            # Préparer les groupes ASQ3 en 3 groupes 
+            thresholds <- tibble(
+              age = c(3, 3, 3, 3, 3, 6, 6, 6, 6, 6, 12, 12, 12, 12, 12), 
+              domain = c("communication","gmotor","fmotor","pbsolving","social",
+                         "communication","gmotor","fmotor","pbsolving","social",
+                         "communication","gmotor","fmotor","pbsolving","social"), 
+              low_cutoff = c(5.8, 6.33, 5, 5.8, 5.5, 
+                             4.9, 3.70, 4.19, 4.62, 4.22, 
+                             5.21, 3.58, 5.75, 4.55, 3.62), 
+              medium_cutoff = c(7.33, 7.67, 6.67, 7.33, 7.17,
+                                6.83, 5.67, 6.17, 6.5, 6.17, 
+                                5, 5.83, 7, 6.17, 5.67), 
+            )  
+            
+            classify_score <- function(score, age, domain, thresholds_df) {
+              row <- thresholds_df %>%
+                filter(age == !!age, domain == !!domain)
+              
+              if (nrow(row) == 0) {
+                warning(paste("Aucun seuil trouvé pour age =", age, "et domain =", domain))
+                return(NA)
+              }
+              
+              low_cutoff <- row$low_cutoff
+              medium_cutoff <- row$medium_cutoff
+              
+              if (score < low_cutoff) {
+                return("low")
+              } else if (score < medium_cutoff) {
+                return("medium")
+              } else {
+                return("high")
+              }
+            }
+            
+            # créé colonne ASQ3_group dans epoch_data (low, medium, high)
+            epoch_data <- epoch_data %>%
+              rowwise() %>%
+              mutate(ASQ_group = classify_score(get(asq3_domain), age, asq3_domain, thresholds)) %>%
+              ungroup()
+            
+            # Graphique avec tendances poly1 (linéaire) et poly2 (quadratique)
+            # Calculer statistiques descriptives avec IC 95%
+            summary_stats <- epoch_data %>%
+              group_by(age, ASQ_group) %>%
+              summarise(
+                n_obs = n(),
+                mean_PC8 = mean(PC8, na.rm = TRUE),
+                sd_PC8 = sd(PC8, na.rm = TRUE),
+                se_PC8 = sd_PC8 / sqrt(n_obs),
+                # IC 95% avec t de Student
+                ci_lower = mean_PC8 - qt(0.975, df = n_obs - 1) * se_PC8,
+                ci_upper = mean_PC8 + qt(0.975, df = n_obs - 1) * se_PC8,
+                .groups = 'drop'
+              ) %>%
+              filter(!is.na(ASQ_group))
+            
+            # Déterminer les paramètres visuels selon la significativité
+            visual_params <- summary_stats %>%
+              mutate(
+                # Taille proportionnelle au nombre d'observations (min 2, max 6)
+                point_size = pmin(pmax(2 + (n_obs - min(n_obs)) / (max(n_obs) - min(n_obs)) * 4, 2), 6),
+                
+                # Codage visuel de la significativité
+                line_type = case_when(
+                  length(interaction_effects) > 0 ~ "solid",  # Interaction significative
+                  length(sig_results$significant_effects) > 0 ~ "dashed", # Autres effets significatifs
+                  TRUE ~ "dotted"  # Pas d'effet significatif
+                ),
+                
+                line_thickness = case_when(
+                  length(interaction_effects) > 0 ~ 1.5,  # Interaction significative
+                  length(sig_results$significant_effects) > 0 ~ 1.2, # Autres effets significatifs
+                  TRUE ~ 0.8  # Pas d'effet significatif
+                ),
+                
+                alpha_level = case_when(
+                  length(interaction_effects) > 0 ~ 1.0,  # Interaction significative
+                  length(sig_results$significant_effects) > 0 ~ 0.8, # Autres effets significatifs
+                  TRUE ~ 0.6  # Pas d'effet significatif
+                )
+              )
+            
+            # Créer le graphique avancé
+            p_advanced <- ggplot(visual_params, aes(x = age, y = mean_PC8, color = ASQ_group)) +
+              
+              # Lignes de tendance avec codage visuel
+              geom_smooth(data = epoch_data, 
+                          aes(x = age, y = PC8, color = ASQ_group),
+                          method = "lm", 
+                          formula = y ~ poly(x, 1, raw = TRUE),
+                          se = FALSE, 
+                          size = unique(visual_params$line_thickness)[1],
+                          linetype = unique(visual_params$line_type)[1],
+                          alpha = unique(visual_params$alpha_level)[1]) +
+              
+              # Points avec taille proportionnelle
+              geom_point(aes(size = point_size), 
+                         alpha = 0.9) +
+              
+              # Barres d'erreur (IC 95%)
+              geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper),
+                            width = 0.3, 
+                            size = 0.8,
+                            alpha = 0.8) +
+              
+              # Personnalisation des échelles
+              scale_size_identity() +
+              scale_color_manual(values = c("low" = "#E31A1C", "medium" = "#FF7F00", "high" = "#1F78B4")) +
+              
+              # Thème et labels
+              labs(
+                title = paste("PC8 par niveaux ASQ3:", asq3_domain, "- Epoch", epoch_val),
+                subtitle = paste("IC 95% | Taille ? n observations | Significativité:", 
+                                 ifelse(length(interaction_effects) > 0, "Interaction***", 
+                                        ifelse(length(sig_results$significant_effects) > 0, "Effet principal*", "NS"))),
+                x = "Âge (mois)",
+                y = "PC8 (moyenne ± IC 95%)",
+                color = "Niveau ASQ3",
+                caption = paste("n total =", nrow(epoch_data), "| Modèle:", deparse(formula_mod))
+              ) +
+              
+              theme_minimal(base_size = 12) +
+              theme(
+                legend.position = "bottom",
+                plot.title = element_text(face = "bold", size = 14),
+                plot.subtitle = element_text(size = 11, color = "gray40"),
+                panel.grid.minor = element_blank(),
+                legend.box = "horizontal"
+              )
+            
+            # Ajouter annotations des p-values significatives
+            if (length(sig_results$significant_effects) > 0) {
+              
+              # Préparer texte d'annotation
+              sig_text <- paste0("Effets significatifs (p < 0.05):\n")
+              
+              for (effect in sig_results$significant_effects) {
+                effect_row <- sig_results$all_effects[sig_results$all_effects$Effect == effect, ]
+                p_val <- effect_row$p_value
+                
+                # Formatage des p-values
+                p_formatted <- if (p_val < 0.001) {
+                  "p < 0.001***"
+                } else if (p_val < 0.01) {
+                  paste0("p = ", sprintf("%.3f", p_val), "**")
+                } else if (p_val < 0.05) {
+                  paste0("p = ", sprintf("%.3f", p_val), "*")
+                } else {
+                  paste0("p = ", sprintf("%.3f", p_val))
+                }
+                
+                sig_text <- paste0(sig_text, "- ", effect, ": ", p_formatted, "\n")
+              }
+              
+              # Ajouter annotation au graphique
+              p_advanced <- p_advanced +
+                annotate("text", 
+                         x = min(visual_params$age), 
+                         y = max(visual_params$ci_upper) * 1.1,
+                         label = sig_text,
+                         hjust = 0, 
+                         vjust = 1,
+                         size = 3,
+                         color = "black",
+                         fontface = "italic",
+                         lineheight = 0.9)
+            }
+            
+            print(p_advanced)
+            
+            # Graphique supplémentaire : Distribution des observations
+            p_n_obs <- visual_params %>%
+              ggplot(aes(x = factor(age), y = n_obs, fill = ASQ_group)) +
+              geom_col(position = "dodge", alpha = 0.7) +
+              geom_text(aes(label = n_obs), 
+                        position = position_dodge(width = 0.9),
+                        vjust = -0.5, size = 3) +
+              scale_fill_manual(values = c("low" = "#E31A1C", "medium" = "#FF7F00", "high" = "#1F78B4")) +
+              labs(
+                title = paste("Distribution des observations - Epoch", epoch_val),
+                x = "Âge (mois)",
+                y = "Nombre d'observations",
+                fill = "Niveau ASQ3"
+              ) +
+              theme_minimal() +
+              theme(legend.position = "bottom")
+            
+            print(p_n_obs)
+            
+          }, error = function(e) {
+            cat("Erreur lmer:", e$message, "\n")
+          })
+        } else {
+          cat("Pas assez de valeurs uniques pour modéliser (minimum 3 requis)\n")
+        }
+      } else {
+        cat("Pas assez de données pour cet epoch (minimum 10 requis)\n")
+      }
+    }
+  } else {
+    cat("Pas assez de données globales pour cette analyse (minimum 20 requis)\n")
+  }
+}
+
+
+diagnose_data()
+
+# Exécuter l'analyse corrigée pour chaque domaine ASQ3
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("ANALYSES DE MODÉRATION ASQ3 (VERSION CORRIGÉE)\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+asq3_results_corrected <- list()
+
+for (domain in asq3_domains) {
+  if (domain %in% colnames(data.gca)) {
+    cat("\n Traitement du domaine:", domain, "\n")
+    results <- analyze_asq3_moderator(domain)
+    asq3_results_corrected[[domain]] <- results
+  } else {
+    cat(" ATTENTION: Domaine ASQ3", domain, "introuvable dans les données\n")
+  }
+}
+
+# Résumé final amélioré
+cat("\n", paste(rep("=", 80), collapse = ""), "\n")
+cat("RÉSUMÉ FINAL DÉTAILLÉ\n")
+cat(paste(rep("=", 80), collapse = ""), "\n")
+
+for (domain in names(asq3_results_corrected)) {
+  cat("\n DOMAINE:", toupper(domain), "\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  
+  domain_results <- asq3_results_corrected[[domain]]
+  
+  if (is.list(domain_results) && !is.null(names(domain_results))) {
+    for (epoch_name in names(domain_results)) {
+      epoch_result <- domain_results[[epoch_name]]
+      cat(" Epoch", epoch_name, ":")
+      
+      if ("model" %in% names(epoch_result)) {
+        n_sig <- length(epoch_result$significance$significant_effects)
+        cat("  Analysée (", n_sig, " effets significatifs)\n")
+      } else if ("error" %in% names(epoch_result)) {
+        cat(" ? Erreur:", epoch_result$error, "\n")
+      } else if ("issue" %in% names(epoch_result)) {
+        cat("  Problème:", epoch_result$issue, "\n")
+      } else {
+        cat("  Statut inconnu\n")
+      }
+    }
+  } else {
+    cat("  Résultats non disponibles\n")
+  }
+}
+
+save_asq3_results <- function() {
+  output_file <- "ASQ3_PC8_GCA_Results.txt"
+  
+  sink(output_file, append = FALSE)
+  
+  
+  cat("MODÈLE PRINCIPAL (Age × Epoch):\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  print(summary(lmer_main))
+  print(Anova(lmer_main, type = 3))
+  
+  cat("\n\nRÉSULTATS MODÉRATION ASQ3:\n")
+  cat(paste(rep("-", 40), collapse = ""), "\n")
+  
+  for (domain in names(asq3_results)) {
+    if (!is.null(asq3_results[[domain]])) {
+      cat("\nDOMAINE:", toupper(domain), "\n")
+      print(asq3_results[[domain]])
+    }
+  }
+  
+  sink()
+  
+  cat("Résultats sauvegardés dans:", output_file, "\n")
+}
+
+save_asq3_results()
+
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

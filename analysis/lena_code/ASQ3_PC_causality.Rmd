@@ -1,0 +1,296 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+```{r PC_GCA_ASQ3_causality}
+
+library(lmtest)
+library(car)
+library(dplyr)
+library(ggplot2)
+library(lme4)
+library(interactions)
+library(emmeans)
+library(ggeffects)
+library(reshape2)
+library(tidyr)
+library(lmerTest)
+
+three_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df <- read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+asq3_3m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/3_ASQ-4months_scores.csv')
+asq3_6m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/6_ASQ-6months_scores.csv')
+asq3_12m <- read.csv('/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/12_ASQ-12months_scores.csv')
+
+print(colnames(asq3_3m))
+print(colnames(asq3_6m))
+print(colnames(asq3_12m))
+
+# Fusion des données PC
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three", age_months = 3),
+  mutate(six_df, df_source = "six", age_months = 6),
+  mutate(twelve_df, df_source = "twelve", age_months = 12)
+) %>%
+  arrange(subject)
+
+# convertit variable age en numérique 
+merged_df$age[merged_df$age == 'three'] <- 3
+merged_df$age[merged_df$age == 'six'] <- 6
+merged_df$age[merged_df$age == 'twelve'] <- 12
+merged_df$age <- as.numeric(merged_df$age)
+
+# Préparation des données ASQ3
+asq3_3m$age_months <- 3
+asq3_6m$age_months <- 6
+asq3_12m$age_months <- 12
+
+colnames(asq3_all)
+
+# Fusion des données ASQ3
+asq3_all <- dplyr::bind_rows(asq3_3m, asq3_6m, asq3_12m) %>%
+  dplyr::select(subject, age_months, communication, gmotor, fmotor, pbsolving, social)
+tail(asq3_all)
+
+asq3_wide <- asq3_all %>%
+  pivot_wider(
+    id_cols = subject, 
+    names_from = age_months,
+    values_from = c(communication, fmotor, gmotor, pbsolving, social), 
+    values_fn = function(x) x[1], # évite que pivot_wider ne stocke les valeurs dans des listes au lieu de simples nombres
+    names_glue = "{.value}_{age_months}"
+  )
+print(asq3_wide)
+
+# Fusion des données PC avec ASQ3
+#data_combined <- merged_df %>%
+ # left_join(asq3_all, by = c("subject", "age_months"))
+#tail(data_combined)
+
+pc_aggregated <- merged_df %>%
+  filter(epoch %in% c("go", "grsp")) %>%
+  group_by(subject, epoch, age_months) %>%
+  summarise(across(starts_with("PC"), ~mean(.x, na.rm = TRUE)), .groups = "drop")  # ou ~median(.x, na.rm = TRUE)
+print(pc_aggregated)
+
+pc_wide <- pc_aggregated %>%
+  pivot_wider(
+    id_cols = subject,
+    names_from = c(epoch, age_months),
+    values_from = starts_with("PC"),
+    names_glue = "{.value}_{epoch}_{age_months}"
+  )
+print(pc_wide)
+
+# Fusionner PC et ASQ3
+final_data <- pc_wide %>%
+  left_join(asq3_wide, by = c("subject"))
+
+write.csv(final_data, "/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/PC_ASQ3_scores_wide.csv", row.names = FALSE)
+
+print(colnames(final_data))
+print(tail(final_data))
+
+  
+# Test 1: fmotor à 3m prédit PC6 à 6m ? 
+test1_data <- final_data %>%
+   filter(!is.na(fmotor_3) & !is.na(PC6_grsp_6))
+cat("Test 1 (fmotor_3m -> PC6_6m):", nrow(test1_data), "subjects\n")
+
+if(nrow(test1_data) > 5) {
+  model1 <- lm(PC6_grsp_6 ~ fmotor_3,  data = test1_data)
+  p_val <- summary(model1)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Tes 2: PC6 à 3m prédit fmotor à 6m ? 
+test2_data <- final_data %>%
+   filter(!is.na(fmotor_3) & !is.na(PC6_grsp_3))
+cat("Test 2 (PC6_3m -> fmotor_6m):", nrow(test2_data), "subjects\n")
+
+if(nrow(test2_data) > 5) {
+  model2 <- lm(fmotor_6 ~ PC6_grsp_3, data = test2_data)
+  p_val <- summary(model2)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 3: fmotor à 6m prédit PC6 à 12m ?
+test3_data <- final_data %>%
+  filter(!is.na(fmotor_6) & !is.na(PC6_grsp_12))
+
+cat("Test 3 (fmotor_6m -> PC6_12m):", nrow(test3_data), "subjects\n")
+if(nrow(test3_data) > 5) {
+  model3 <- lm(PC6_grsp_12 ~ fmotor_6,  data = test3_data)
+  p_val <- summary(model3)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 4: PC6 à 6m prédit fmotor à 12m ?
+test4_data <- final_data%>%
+  filter(!is.na(PC6_grsp_6) & !is.na(fmotor_12))
+
+cat("Test 4 (PC6_6m -> fmotor_12m):", nrow(test4_data), "subjects\n")
+if(nrow(test4_data) > 5) {
+  model4 <- lm(fmotor_12 ~ PC6_grsp_6, data = test4_data)
+  p_val <- summary(model4)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 5: fmotor à 3m prédit PC6 à 12m ?
+test5_data <- final_data %>%
+  filter(!is.na(fmotor_3) & !is.na(PC6_grsp_12))
+
+cat("Test 5 (fmotor_3m -> PC6_12m):", nrow(test5_data), "subjects\n")
+if(nrow(test5_data) > 5) {
+  model5 <- lm(PC6_grsp_12 ~ fmotor_3,  data = test5_data)
+  p_val <- summary(model5)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 6: PC6 à 3m prédit fmotor à 12m ?
+test6_data <- final_data%>%
+  filter(!is.na(PC6_grsp_3) & !is.na(fmotor_12))
+
+cat("Test 6 (PC6_3m -> fmotor_12m):", nrow(test6_data), "subjects\n")
+if(nrow(test6_data) > 5) {
+  model6 <- lm(fmotor_12 ~ PC6_grsp_3, data = test6_data)
+  p_val <- summary(model6)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+
+# Test 1 bis : gmotor à 3m prédit PC6 à 6m ? 
+test1_data <- final_data %>%
+   filter(!is.na(gmotor_3) & !is.na(PC6_grsp_6))
+cat("Test 1 bis (gmotor_3m -> PC6_6m):", nrow(test1_data), "subjects\n")
+
+if(nrow(test1_data) > 5) {
+  model1 <- lm(PC6_grsp_6 ~ gmotor_3,  data = test1_data)
+  p_val <- summary(model1)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Tes 2 bis: PC6 à 3m prédit gmotor à 6m ? 
+test2_data <- final_data %>%
+   filter(!is.na(gmotor_3) & !is.na(PC6_grsp_3))
+cat("Test 2 bis (PC6_3m -> gmotor_6m):", nrow(test2_data), "subjects\n")
+
+if(nrow(test2_data) > 5) {
+  model2 <- lm(gmotor_6 ~ PC6_grsp_3, data = test2_data)
+  p_val <- summary(model2)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 3 bis: gmotor à 6m prédit PC6 à 12m ?
+test3_data <- final_data %>%
+  filter(!is.na(gmotor_6) & !is.na(PC6_grsp_12))
+
+cat("Test 3 bis (gmotor_6m -> PC6_12m):", nrow(test3_data), "subjects\n")
+if(nrow(test3_data) > 5) {
+  model3 <- lm(PC6_grsp_12 ~ gmotor_6,  data = test3_data)
+  p_val <- summary(model3)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+# Test 4 bis: PC6 à 6m prédit gmotor à 12m ?
+test4_data <- final_data%>%
+  filter(!is.na(PC6_grsp_6) & !is.na(gmotor_12))
+
+cat("Test 4 bis (PC6_6m -> gmotor_12m):", nrow(test4_data), "subjects\n")
+if(nrow(test4_data) > 5) {
+  model4 <- lm(gmotor_12 ~ PC6_grsp_6, data = test4_data)
+  p_val <- summary(model4)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 5 bis: gmotor à 3m prédit PC6 à 12m ?
+test5_data <- final_data %>%
+  filter(!is.na(gmotor_3) & !is.na(PC6_grsp_12))
+
+cat("Test 5 bis (gmotor_3m -> PC6_12m):", nrow(test5_data), "subjects\n")
+if(nrow(test5_data) > 5) {
+  model5 <- lm(PC6_grsp_12 ~ gmotor_3,  data = test5_data)
+  p_val <- summary(model5)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 6 bis : PC6 à 3m prédit gmotor à 12m ?
+test6_data <- final_data%>%
+  filter(!is.na(PC6_grsp_3) & !is.na(gmotor_12))
+
+cat("Test 6 bis (PC6_3m -> gmotor_12m):", nrow(test6_data), "subjects\n")
+if(nrow(test6_data) > 5) {
+  model6 <- lm(gmotor_12 ~ PC6_grsp_3, data = test6_data)
+  p_val <- summary(model6)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+
+# Test 7 bis : PC7 à 3m prédit gmotor à 3m ?
+test7_data <- final_data%>%
+  filter(!is.na(PC7_grsp_3) & !is.na(gmotor_3))
+
+cat("Test 7 bis (PC7_3m -> gmotor_3m):", nrow(test6_data), "subjects\n")
+if(nrow(test7_data) > 5) {
+  model7 <- lm(gmotor_3 ~ PC7_grsp_3, data = test7_data)
+  p_val <- summary(model7)$coefficients[2, 4]
+  cat("P-value:", round(p_val, 4), "\n")
+}
+#colnames(final_data)
+
+# Nombre total de subjects
+n_total <- nrow(final_data)
+
+# Nombre de subjects avec PC6_grsp_3 non NA
+n_PC6_3 <- sum(!is.na(final_data$PC6_grsp_3))
+
+# Nombre de subjects avec PC6_grsp_6 non NA
+n_PC6_6 <- sum(!is.na(final_data$PC6_grsp_6))
+
+# Nombre de subjects avec PC6_grsp_12 non NA
+n_PC6_12 <- sum(!is.na(final_data$PC6_grsp_12))
+
+# Nombre de subjects avec fmotor_3 non NA
+n_fmotor_3 <- sum(!is.na(final_data$fmotor_3))
+
+# Nombre de subjects avec fmotor_6 non NA
+n_fmotor_6 <- sum(!is.na(final_data$fmotor_6))
+
+# Nombre de subjects avec fmotor_12 non NA
+n_fmotor_12 <- sum(!is.na(final_data$fmotor_12))
+
+# Nombre de subjects avec PC6_grsp_3 ET fmotor_6 non NA
+n_both <- sum(!is.na(final_data$PC6_grsp_3) & !is.na(final_data$fmotor_6))
+
+# Nombre de subjects avec PC6_grsp_6 ET fmotor_12 non NA
+n_both <- sum(!is.na(final_data$PC6_grsp_6) & !is.na(final_data$fmotor_12))
+
+
+cat("Total subjects :", n_total, "\n")
+cat("subjects avec PC6_grsp_3 :", n_PC6_3, "\n")
+cat("subjects avec PC6_grsp_6 :", n_PC6_6, "\n")
+cat("subjects avec PC6_grsp_12 :", n_PC6_12, "\n")
+cat("subjects avec fmotor_3 :", n_fmotor_3, "\n")
+cat("subjects avec fmotor_6 :", n_fmotor_6, "\n")
+cat("subjects avec fmotor_12 :", n_fmotor_12, "\n")
+cat("subjects avec PC6_grsp_3 ET fmotor_6 :", n_both, "\n")
+cat("subjects avec PC6_grsp_6 ET fmotor_12 :", n_both, "\n")
+
+```
+
+
+
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

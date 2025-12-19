@@ -1,0 +1,176 @@
+---
+title: "PC analysis ages within each epoch"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r PC4}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC4 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age|epoch)
+print(emm)
+```
+```{r PC7}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC7 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age|epoch)
+print(emm)
+```
+
+```{r PC8}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC8 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age|epoch)
+print(emm)
+```
+
+```{r PC9}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC9 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age|epoch)
+print(emm)
+```
+```{r PC7}
+library(lme4)
+library(emmeans)
+library(car)
+library(dplyr)
+
+three_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_three.csv')
+six_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_six.csv')
+twelve_df<-read.csv('/home/ldurieux/devmobeta_grasp/bursts_with_pc_twelve.csv')
+
+merged_df <- bind_rows(
+  mutate(three_df, df_source = "three"),
+  mutate(six_df, df_source = "six"),
+  mutate(twelve_df, df_source = "twelve")
+) %>%
+  arrange(subject)
+
+# Result:
+head(merged_df)
+
+# Linear mixed-effects model on DT index
+model <- lmer(PC7 ~ age*epoch + (1 | subject), data = merged_df)
+summary(model)
+
+# Analysis of variance
+anova_results <- Anova(model)
+print(anova_results)
+
+# Post hoc pairwise comparisons
+emm <- emmeans(model, pairwise ~ age|epoch)
+print(emm)
+```
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

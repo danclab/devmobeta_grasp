@@ -1,0 +1,174 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(MASS)
+library(car)
+library(ggplot2)
+
+setwd("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/")
+dir.exists("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/")
+
+
+
+
+final_data <- read.csv("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/PC_ASQ3_scores_wide.csv")
+from_ages <- c('3','6','3')
+to_ages <- c('6','12','12')
+
+for (pc in 1:10) {
+  for (p_idx in seq_along(from_ages)) {
+    age1 <- from_ages[p_idx]
+    age2 <- to_ages[p_idx]
+    for (asq_col in c('communication', 'fmotor', 'gmotor', 'pbsolving', 'social')) {
+      for (epoch in c('go', 'grsp')) {
+        
+        # ASQ -> PC
+        predictor <- paste0(asq_col, '_', age1)
+        outcome <- paste0('PC', pc, '_', epoch, '_', age2)
+        if (all(c(predictor, outcome) %in% names(final_data))) {
+          df <- final_data[, c(predictor, outcome)]
+          df <- na.omit(df)
+          n <- nrow(df)
+          if (n > 10) {
+            model <- rlm(df[[outcome]] ~ df[[predictor]]) #robust linear model 
+            summary_model <- summary(model)
+            t_stat <- summary_model$coefficients[2, "t value"]
+            df_resid <- nrow(model$model) - length(coef(model))
+            p_val <- 2 * pt(-abs(t_stat), df = df_resid)
+            if (p_val < 0.05) {
+              print(paste0('Significant: ', predictor, ' -> ', outcome, ', N=', n, ', p=', round(p_val, 4)))
+              dev.new()
+              # p<-ggplot(df, aes(x = .data[[predictor]], y = .data[[outcome]])) +
+              #   geom_point() +
+              #   geom_smooth(method = MASS::rlm, formula = y ~ x, se = TRUE, color = "blue") +
+              #   labs(title = paste0(predictor, ' -> ', outcome),
+              #        subtitle = paste0('p = ', signif(p_val, 3), ', N = ', n)) +
+              #   theme_minimal()
+              # print(p)
+              
+            }
+          }
+        }
+        
+        # PC -> ASQ
+        predictor <- paste0('PC', pc, '_', epoch, '_', age1)
+        outcome <- paste0(asq_col, '_', age2)
+        if (all(c(predictor, outcome) %in% names(final_data))) {
+          df <- final_data[, c(predictor, outcome)]
+          df <- na.omit(df)
+          n <- nrow(df)
+          if (n > 10) {
+            model <- rlm(df[[outcome]] ~ df[[predictor]])
+            summary_model <- summary(model)
+            t_stat <- summary_model$coefficients[2, "t value"]
+            df_resid <- nrow(model$model) - length(coef(model))
+            p_val <- 2 * pt(-abs(t_stat), df = df_resid)
+            if (p_val < 0.05) {
+              print(paste0(predictor, ' -> ', outcome, ', N=', n, ', p=', round(p_val, 4)))
+              dev.new()
+              # p<-ggplot(df, aes(x = .data[[predictor]], y = .data[[outcome]])) +
+              #   geom_point() +
+              #   geom_smooth(method = MASS::rlm, formula = y ~ x, se = TRUE, color = "blue") +
+              #   labs(title = paste0('Standardized: ', predictor, ' -> ', outcome),
+              #        subtitle = paste0('p = ', signif(p_val, 3), ', N = ', n)) +
+              #   theme_minimal()
+              # print(p)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+```{r}
+library(MASS)
+library(car)
+library(ggplot2)
+
+setwd("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/")
+dir.exists("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/")
+
+final_data <- read.csv("/home/ldurieux/devmobeta_grasp/analysis/questionnaires/ASQ/PC_ASQ3_scores_wide.csv")
+from_ages <- c('3','6','12')
+to_ages <- c('3','6','12')
+
+for (pc in 1:10) {
+  for (p_idx in seq_along(from_ages)) {
+    age1 <- from_ages[p_idx]
+    age2 <- to_ages[p_idx]
+    for (asq_col in c('communication', 'fmotor', 'gmotor', 'pbsolving', 'social')) {
+      for (epoch in c('go', 'grsp')) {
+        
+        # ASQ -> PC
+        predictor <- paste0(asq_col, '_', age1)
+        outcome <- paste0('PC', pc, '_', epoch, '_', age2)
+        if (all(c(predictor, outcome) %in% names(final_data))) {
+          df <- final_data[, c(predictor, outcome)]
+          df <- na.omit(df)
+          n <- nrow(df)
+          if (n > 10) {
+            model <- rlm(df[[outcome]] ~ df[[predictor]]) #robust linear model 
+            summary_model <- summary(model)
+            t_stat <- summary_model$coefficients[2, "t value"]
+            df_resid <- nrow(model$model) - length(coef(model))
+            p_val <- 2 * pt(-abs(t_stat), df = df_resid)
+            if (p_val < 0.05) {
+              print(paste0('Significant: ', predictor, ' -> ', outcome, ', N=', n, ', p=', round(p_val, 4)))
+              dev.new()
+              p<-ggplot(df, aes(x = .data[[predictor]], y = .data[[outcome]])) +
+                geom_point() +
+                geom_smooth(method = MASS::rlm, formula = y ~ x, se = TRUE, color = "blue") +
+                labs(title = paste0(predictor, ' -> ', outcome),
+                     subtitle = paste0('p = ', signif(p_val, 3), ', N = ', n)) +
+                theme_minimal()
+              print(p)
+              
+            }
+          }
+        }
+        
+        # PC -> ASQ
+        predictor <- paste0('PC', pc, '_', epoch, '_', age1)
+        outcome <- paste0(asq_col, '_', age2)
+        if (all(c(predictor, outcome) %in% names(final_data))) {
+          df <- final_data[, c(predictor, outcome)]
+          df <- na.omit(df)
+          n <- nrow(df)
+          if (n > 10) {
+            model <- rlm(df[[outcome]] ~ df[[predictor]])
+            summary_model <- summary(model)
+            t_stat <- summary_model$coefficients[2, "t value"]
+            df_resid <- nrow(model$model) - length(coef(model))
+            p_val <- 2 * pt(-abs(t_stat), df = df_resid)
+            if (p_val < 0.05) {
+              print(paste0(predictor, ' -> ', outcome, ', N=', n, ', p=', round(p_val, 4)))
+              dev.new()
+              p<-ggplot(df, aes(x = .data[[predictor]], y = .data[[outcome]])) +
+                geom_point() +
+                geom_smooth(method = MASS::rlm, formula = y ~ x, se = TRUE, color = "blue") +
+                labs(title = paste0('Standardized: ', predictor, ' -> ', outcome),
+                     subtitle = paste0('p = ', signif(p_val, 3), ', N = ', n)) +
+                theme_minimal()
+              print(p)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
